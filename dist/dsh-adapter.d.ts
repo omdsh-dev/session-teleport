@@ -1,4 +1,4 @@
-import { Context } from "@deepseek-ai/cordis";
+import { Context, Service } from "@deepseek-ai/cordis";
 import { SessionPersistence, SessionPersistenceRevision, type PersistenceBackend, type SessionLocation, type SessionPersistenceSnapshot, type StoredPrefix, type StoredSuffix } from "@deepseek-ai/dsh-session-persistence";
 import type { SessionEvent, SessionHeader, SessionId, SessionPreparation } from "@deepseek-ai/dsh-session";
 import { type WriterCredentialStore } from "./credential-store.js";
@@ -9,6 +9,7 @@ export interface SessionPersistenceTeleportConfig {
     apiToken?: string;
     deviceId: string;
     credentialDir: string;
+    healthTimeoutMs?: number;
 }
 export interface SessionPersistenceTeleportDependencies {
     client?: TeleportClient;
@@ -27,6 +28,7 @@ export declare class SessionPersistenceTeleport extends SessionPersistence imple
     private readonly sourceIdentity;
     private readonly deviceId;
     constructor(ctx: Context, config: SessionPersistenceTeleportConfig, dependencies?: SessionPersistenceTeleportDependencies);
+    protected [Service.init](): Promise<void>;
     locate(_meta: SessionHeader): SessionLocation | undefined;
     create(meta: SessionHeader): Promise<void>;
     append(id: SessionId, events: readonly SessionEvent[]): Promise<void>;

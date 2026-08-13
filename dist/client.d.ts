@@ -10,6 +10,7 @@ export declare class TeleportClient {
     private readonly adminToken?;
     private readonly baseUrl;
     constructor(baseUrl: string, apiToken?: string | undefined, adminToken?: string | undefined);
+    health(signal?: AbortSignal): Promise<void>;
     createSession(request: CreateSessionRequest): Promise<CreateSessionResult>;
     materializeSession(request: MaterializeSessionRequest): Promise<MaterializeSessionResult>;
     listHeads(): Promise<SessionHead[]>;

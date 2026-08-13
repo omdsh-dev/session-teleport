@@ -41,6 +41,25 @@ export class TeleportClient {
     this.baseUrl = baseUrl.replace(/\/$/, "");
   }
 
+  async health(signal?: AbortSignal): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/health`, {
+      ...(signal === undefined ? {} : { signal }),
+    });
+    if (response.ok) {
+      await response.arrayBuffer();
+      return;
+    }
+    let message = `Teleport service returned HTTP ${response.status}`;
+    try {
+      const payload = (await response.json()) as { error?: { message?: string } };
+      message = payload.error?.message ?? message;
+    } catch {
+      // Preserve the status-only diagnostic when an intermediary returns
+      // non-JSON content.
+    }
+    throw new TeleportRemoteError(response.status, "HEALTH_CHECK_FAILED", message);
+  }
+
   createSession(request: CreateSessionRequest): Promise<CreateSessionResult> {
     return this.request("POST", "/v1/sessions", request);
   }

@@ -55,12 +55,20 @@ packages。本仓库不分发这些依赖，也不要求把软件源配置或访
 为运行该 profile 的每台设备配置：
 
 ```bash
+export DSH_TELEPORT_ENABLE=1
 export DSH_TELEPORT_URL=https://teleport.example.com
 export DSH_TELEPORT_API_TOKEN=a-long-random-service-token
 export DSH_TELEPORT_DEVICE_ID=office-mac
+# 可选：启动健康检查超时，默认 5000 毫秒
+export DSH_TELEPORT_HEALTH_TIMEOUT_MS=5000
 ```
 
-安装或卸载会切换 Session authority，升级也会替换 profile 依赖。请先让正在写入的
+仅安装 bundle 不会切换 Session authority：默认仍使用 RC.5 自带 JSONL，Teleport
+adapter 保持禁用。先启动 Teleport 服务并验证 `/health`，再停止 profile、设置
+`DSH_TELEPORT_ENABLE=1` 并重启，才会关闭 JSONL、启用 Teleport。显式启用后如果
+服务不可达，profile 会拒绝启动，不会静默回退到另一份权威存储。
+
+启用或停用会切换 Session authority，升级也会替换 profile 依赖。请先让正在写入的
 turn 完成并停止对应 profile，再重启；不要把它当成对运行中 Session 无影响的热替换。
 生命周期工具不会删除 PostgreSQL 数据或本机 writer 凭据。完整步骤见
 [插件生命周期](docs/PLUGIN_LIFECYCLE.md) 和 [DSH 接入说明](docs/DSH_INTEGRATION.md)。

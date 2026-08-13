@@ -15,6 +15,7 @@
     "url": "https://github.com/omdsh-dev/session-teleport/issues"
   },
   "keywords": [
+    "dsh-plugin",
     "deepseek-harness",
     "session",
     "postgresql",

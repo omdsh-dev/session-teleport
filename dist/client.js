@@ -17,6 +17,22 @@ class TeleportClient {
   apiToken;
   adminToken;
   baseUrl;
+  async health(signal) {
+    const response = await fetch(`${this.baseUrl}/health`, {
+      ...signal === void 0 ? {} : { signal }
+    });
+    if (response.ok) {
+      await response.arrayBuffer();
+      return;
+    }
+    let message = `Teleport service returned HTTP ${response.status}`;
+    try {
+      const payload = await response.json();
+      message = payload.error?.message ?? message;
+    } catch {
+    }
+    throw new TeleportRemoteError(response.status, "HEALTH_CHECK_FAILED", message);
+  }
   createSession(request) {
     return this.request("POST", "/v1/sessions", request);
   }

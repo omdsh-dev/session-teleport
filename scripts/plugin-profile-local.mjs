@@ -76,9 +76,18 @@ try {
     ).href
   );
   assert(adapter.default?.name === "SessionPersistenceTeleport", "adapter is not loadable");
-  const configured = runDsh(["--profile", profile, "--dump-config"]).stdout;
-  assertRow(configured, "session-persistence-jsonl", true);
-  assert(configured.includes("session-persistence-teleport"), "Teleport row is missing");
+  const safeDefault = runDsh(["--profile", profile, "--dump-config"]).stdout;
+  assertRow(safeDefault, "session-persistence-jsonl", false);
+  assertRowExpression(
+    safeDefault,
+    "session-persistence-jsonl",
+    "process.env.DSH_TELEPORT_ENABLE === '1'",
+  );
+  assertRowExpression(
+    safeDefault,
+    "session-persistence-teleport",
+    "process.env.DSH_TELEPORT_ENABLE !== '1'",
+  );
 
   runDsh(["plugin", "--profile", profile, "remove", "@mattheliu/session-teleport"]);
   const removed = JSON.parse(await readFile(join(profileDir, "package.json"), "utf8"));
@@ -92,7 +101,7 @@ try {
   process.stdout.write(
     [
       "local profile: package install passed",
-      "local profile: bundle composition passed",
+      "local profile: safe default and explicit cutover composition passed",
       "local profile: packaged binaries and adapter passed",
       "local profile: uninstall restored JSONL composition",
     ].join("\n") + "\n",
@@ -101,8 +110,11 @@ try {
   await rm(root, { recursive: true, force: true });
 }
 
-function runDsh(args) {
-  return run(process.execPath, [dshBin, ...args], projectDir, environment);
+function runDsh(args, overrides = {}) {
+  return run(process.execPath, [dshBin, ...args], projectDir, {
+    ...environment,
+    ...overrides,
+  });
 }
 
 function requiredPath(name) {
@@ -120,6 +132,15 @@ function requiredPeerSpecs() {
       "DSH_TELEPORT_TEST_JSONL_SPEC",
     ),
     "@deepseek-ai/cordis": requiredValue("DSH_TELEPORT_TEST_CORDIS_SPEC"),
+    "@deepseek-ai/cordis-plugin-include": "1.0.6-rc.4",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.2-rc.4",
+    "@deepseek-ai/dsh-attachment": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-brand": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-invariants": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-llm": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-scope": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-timeout": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.0.1-rc.5",
   };
 }
 
@@ -144,12 +165,21 @@ function run(command, args, cwd, env) {
 }
 
 function assertRow(config, id, disabled) {
+  const row = configRow(config, id);
+  assert(row.includes("disabled: true") === disabled, `${id} disabled state is wrong`);
+}
+
+function assertRowExpression(config, id, expression) {
+  const row = configRow(config, id);
+  assert(row.includes(expression), `${id} does not contain the expected enablement expression`);
+}
+
+function configRow(config, id) {
   const lines = config.split(/\r?\n/);
   const start = lines.findIndex((line) => line === `- id: ${id}`);
   assert(start >= 0, `missing config row ${id}`);
   const end = lines.findIndex((line, index) => index > start && line.startsWith("- id: "));
-  const row = lines.slice(start, end < 0 ? undefined : end).join("\n");
-  assert(row.includes("disabled: true") === disabled, `${id} disabled state is wrong`);
+  return lines.slice(start, end < 0 ? undefined : end).join("\n");
 }
 
 function assert(condition, message) {

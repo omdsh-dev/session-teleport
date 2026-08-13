@@ -1,3 +1,4 @@
+import { Service } from "@deepseek-ai/cordis";
 import {
   PersistenceCoordinator,
   SessionPersistence,
@@ -30,6 +31,17 @@ class SessionPersistenceTeleport extends SessionPersistence {
   observedHeads = /* @__PURE__ */ new Map();
   sourceIdentity;
   deviceId;
+  async [Service.init]() {
+    const timeoutMs = this.config.healthTimeoutMs ?? 5e3;
+    try {
+      await this.client.health(AbortSignal.timeout(timeoutMs));
+    } catch (error) {
+      throw new Error(
+        `Teleport service health check failed for ${this.config.baseUrl}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
+      );
+    }
+  }
   locate(_meta) {
     return void 0;
   }
@@ -238,6 +250,9 @@ function validateConfig(config) {
   }
   if (typeof config.credentialDir !== "string" || config.credentialDir.length === 0) {
     throw new TypeError("Teleport credentialDir is required");
+  }
+  if (config.healthTimeoutMs !== void 0 && (!Number.isSafeInteger(config.healthTimeoutMs) || config.healthTimeoutMs <= 0)) {
+    throw new TypeError("Teleport healthTimeoutMs must be a positive integer");
   }
 }
 var dsh_adapter_default = SessionPersistenceTeleport;

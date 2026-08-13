@@ -38,9 +38,9 @@ node dist/plugin-cli.js install --profile web --revision <full-commit-sha> \
 ```
 
 The package commits `dist/` and has no install-time build lifecycle, so a Git
-install does not need to execute repository build scripts. The bundle patch
-disables the base JSONL authority for that profile and inserts the Teleport
-adapter after the base bundles.
+install does not need to execute repository build scripts. Installation alone
+is fail-safe: the bundle leaves the base JSONL authority enabled and inserts a
+disabled Teleport adapter after the base bundles.
 
 The published-package compatibility baseline is Cordis `4.0.1-rc.4` with DSH
 Session, Session Persistence and Session Persistence JSONL `0.0.1-rc.5`.
@@ -50,10 +50,17 @@ checkout or generated package snapshot is used by the adapter typecheck.
 Set these values on every device that runs the profile:
 
 ```bash
+export DSH_TELEPORT_ENABLE=1
 export DSH_TELEPORT_URL=https://teleport.example.com
 export DSH_TELEPORT_API_TOKEN=a-long-random-service-token
 export DSH_TELEPORT_DEVICE_ID=office-mac
+export DSH_TELEPORT_HEALTH_TIMEOUT_MS=5000
 ```
+
+Start the Teleport service and verify `/health` before enabling the adapter.
+Only `DSH_TELEPORT_ENABLE=1` disables JSONL and activates Teleport. If the
+service is then unreachable, profile startup fails closed instead of silently
+falling back to a different authority.
 
 Writer credentials live under `$DSH_HOME/session-teleport/writers`. Filenames
 are SHA-256 identifiers and files use mode 0600. This is OS file-permission
@@ -67,7 +74,8 @@ configuration. Before adding, updating or removing the plugin:
 1. Let the active turn finish and flush its writes.
 2. Stop the affected profile/context.
 3. Run the plugin command and inspect the resulting config if desired.
-4. Start the profile and verify `/health` before resuming work.
+4. Verify the Teleport service `/health`, set or clear
+   `DSH_TELEPORT_ENABLE=1` for the intended authority, then start the profile.
 
 This is a controlled profile restart, not a live replacement of an active
 writer. Other profiles and the PostgreSQL service do not need to stop.

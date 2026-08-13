@@ -1,12 +1,15 @@
-# Replace the base JSONL authority with Teleport for this profile.
+# Installation is fail-safe: JSONL remains authoritative until the operator
+# has started the Teleport service and explicitly enables the cutover.
 - id: session-persistence-jsonl
-  disabled: true
+  disabled: !!js process.env.DSH_TELEPORT_ENABLE === '1'
 
 - insert:
     - id: session-persistence-teleport
       name: '@mattheliu/session-teleport/dsh-adapter'
+      disabled: !!js process.env.DSH_TELEPORT_ENABLE !== '1'
       config:
         baseUrl: !!js process.env.DSH_TELEPORT_URL ?? 'http://127.0.0.1:43127'
         apiToken: !!js process.env.DSH_TELEPORT_API_TOKEN
         deviceId: !!js process.env.DSH_TELEPORT_DEVICE_ID ?? process.env.HOSTNAME ?? 'local-device'
         credentialDir: !!js dshHomePath('session-teleport', 'writers')
+        healthTimeoutMs: !!js Number(process.env.DSH_TELEPORT_HEALTH_TIMEOUT_MS ?? '5000')

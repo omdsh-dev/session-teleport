@@ -1,4 +1,4 @@
-import { Context } from "@deepseek-ai/cordis";
+import { Context, Service } from "@deepseek-ai/cordis";
 import {
   PersistenceCoordinator,
   SessionPersistence,
@@ -34,6 +34,7 @@ export interface SessionPersistenceTeleportConfig {
   apiToken?: string;
   deviceId: string;
   credentialDir: string;
+  healthTimeoutMs?: number;
 }
 
 export interface SessionPersistenceTeleportDependencies {
@@ -77,6 +78,18 @@ export class SessionPersistenceTeleport
     this.credentials =
       dependencies.credentialStore ?? new FileWriterCredentialStore(config.credentialDir);
     this.coordinator = new PersistenceCoordinator<never>(this.ctx, this);
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const timeoutMs = this.config.healthTimeoutMs ?? 5_000;
+    try {
+      await this.client.health(AbortSignal.timeout(timeoutMs));
+    } catch (error: unknown) {
+      throw new Error(
+        `Teleport service health check failed for ${this.config.baseUrl}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
   }
 
   locate(_meta: SessionHeader): SessionLocation | undefined {
@@ -346,6 +359,12 @@ function validateConfig(config: SessionPersistenceTeleportConfig): void {
   }
   if (typeof config.credentialDir !== "string" || config.credentialDir.length === 0) {
     throw new TypeError("Teleport credentialDir is required");
+  }
+  if (
+    config.healthTimeoutMs !== undefined &&
+    (!Number.isSafeInteger(config.healthTimeoutMs) || config.healthTimeoutMs <= 0)
+  ) {
+    throw new TypeError("Teleport healthTimeoutMs must be a positive integer");
   }
 }
 

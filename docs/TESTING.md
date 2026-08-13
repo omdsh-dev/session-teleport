@@ -102,8 +102,10 @@ DSH_TELEPORT_TEST_CORDIS_SPEC=4.0.1-rc.4 \
 ```
 
 This packs the current source, installs it into a disposable profile, checks
-the adapter and every packaged binary, then removes it and verifies the JSONL
-composition is restored.
+the adapter and every packaged binary, verifies the safe JSONL default and the
+explicit `DSH_TELEPORT_ENABLE=1` cutover, then removes it and verifies the
+JSONL composition is restored. The script also installs the exact RC.5 peer
+closure needed to import the official persistence packages.
 
 After that, validate repository install and upgrade pins.
 

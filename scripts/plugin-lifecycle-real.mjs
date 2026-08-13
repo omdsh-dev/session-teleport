@@ -19,6 +19,7 @@ const sentinel = join(credentialDir, "preserved-by-uninstall");
 const environment = {
   ...process.env,
   DSH_HOME: dshHome,
+  DSH_TELEPORT_ENABLE: "1",
   DSH_TELEPORT_URL: "http://127.0.0.1:43127",
   DSH_TELEPORT_DEVICE_ID: "lifecycle-real-device",
 };
@@ -132,7 +133,18 @@ function optionalPeerSpecs() {
   if (missing.length > 0) {
     throw new Error(`peer package specs must be supplied together; missing ${missing.map(([name]) => name).join(", ")}`);
   }
-  return Object.fromEntries(entries);
+  return {
+    ...Object.fromEntries(entries),
+    "@deepseek-ai/cordis-plugin-include": "1.0.6-rc.4",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.2-rc.4",
+    "@deepseek-ai/dsh-attachment": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-brand": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-invariants": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-llm": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-scope": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-timeout": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.0.1-rc.5",
+  };
 }
 
 async function installPeers(specs) {

@@ -30,9 +30,10 @@ export interface PluginLifecycleResult {
 }
 /**
  * Plan or apply one controlled DSH profile plugin lifecycle operation.
- * Install/uninstall are authority cutovers; upgrade preserves the authority
- * but still requires the profile to be stopped. No operation deletes writer
- * credentials, import receipts, or PostgreSQL data.
+ * Install/uninstall can change the authority when the target profile carries
+ * DSH_TELEPORT_ENABLE=1; upgrade preserves the selected authority but still
+ * requires the profile to be stopped. No operation deletes writer credentials,
+ * import receipts, or PostgreSQL data.
  */
 export declare function runPluginLifecycle(options: PluginLifecycleOptions): Promise<PluginLifecycleResult>;
 export declare function lifecyclePlan(action: Exclude<PluginLifecycleAction, "doctor">, profile: string, previousSpec?: string, desiredSpec?: string): string[];

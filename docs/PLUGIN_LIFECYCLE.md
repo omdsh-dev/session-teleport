@@ -1,8 +1,9 @@
 # Plugin lifecycle
 
-Teleport is a persistence authority, so installing or removing it is a backend
-cutover, not a hot reload. Only the affected DSH profile must stop; the
-PostgreSQL service and unrelated profiles can remain online.
+Teleport is a persistence authority. Installing its bundle is fail-safe and
+leaves JSONL authoritative by default; enabling or removing an active Teleport
+backend is a controlled cutover, not a hot reload. Only the affected DSH profile
+must stop; the PostgreSQL service and unrelated profiles can remain online.
 
 The lifecycle CLI is intentionally dependency-free and accepts only a full
 40-character commit SHA for repository installs. Mutation commands are plans by
@@ -12,8 +13,8 @@ they call the official `dsh plugin` command.
 The adapter has required peer dependencies on matching DSH Session, Session
 Persistence and Cordis packages. Configure the target DSH installation to
 resolve those peers through its supported software sources before install. The
-lifecycle tool does not create or persist package-manager configuration.
-The current npm next validation baseline is Cordis `4.0.1-rc.4` and DSH Session,
+lifecycle tool does not create or persist package-manager configuration. The
+current npm next validation baseline is Cordis `4.0.1-rc.4` and DSH Session,
 Session Persistence and Session Persistence JSONL `0.0.1-rc.5`.
 
 ## Bootstrap
@@ -40,27 +41,32 @@ node dist/plugin-cli.js install \
 
 `--cutover-safe` is an operator assertion: it means an old Session will not be
 silently resumed against the new authority without the documented import and
-cutover checks.
+cutover checks. It is still required for install because the target service
+manager may already provide `DSH_TELEPORT_ENABLE=1`; the lifecycle process does
+not assume or rewrite that external environment.
 
 ## Doctor and restart
 
-Start the Teleport service and profile, then run:
+Before enabling Teleport, start the service, export the same adapter variables
+that the profile will receive (including `DSH_TELEPORT_ENABLE=1`), then run:
 
 ```bash
 $DSH_HOME/profiles/web/node_modules/.bin/dsh-teleport-plugin doctor --profile web
 ```
 
 Doctor checks the Node and DSH runtime, immutable dependency pin, final bundle
-order, effective persistence rows, credential-directory permissions, explicit
-device identity, token presence, and `/health`. It never prints token values.
-Use `--offline` only for package/config verification; an online doctor is still
-required before resuming a Session. `--json` produces evidence suitable for a
-redacted test bundle.
+order, effective persistence rows, selected cutover mode, credential-directory
+permissions, explicit device identity, token presence, and `/health`. It never
+prints token values. Service health is informationally skipped while JSONL is
+still authoritative, but becomes a hard failure when `DSH_TELEPORT_ENABLE=1`.
+Use `--offline` only for package/config verification; an online doctor is
+required before enabling or resuming Teleport. `--json` produces evidence
+suitable for a redacted test bundle.
 
 ## Upgrade
 
-Use the target revision's local checkout so the lifecycle process is outside
-the profile it replaces:
+Use the target revision's local checkout so the lifecycle process is outside the
+profile it replaces:
 
 ```bash
 git fetch origin
@@ -77,9 +83,9 @@ If that structural verification fails, it re-adds the previous exact dependency
 before returning an error. Runtime smoke tests happen after restart; if they
 fail, stop the profile and upgrade back to the previous SHA.
 
-Schema compatibility remains the service's responsibility. A database backup
-and restore drill is required before any release that changes the schema; the
-plugin lifecycle command never rolls back PostgreSQL migrations.
+Schema compatibility remains the service's responsibility. A database backup and
+restore drill is required before any release that changes the schema; the plugin
+lifecycle command never rolls back PostgreSQL migrations.
 
 ## Uninstall
 
@@ -106,7 +112,8 @@ separate, reviewed data-retention procedure.
 ## Failure and concurrency behavior
 
 Only one lifecycle mutation may run for a profile at a time. A local owner-only
-gone. Child-process diagnostics redact inherited token, password, secret,
-credential and database URL values. A failed plugin-manager command does not claim success; a
+lock prevents concurrent mutation and is removed on clean exit. Child-process
+diagnostics redact inherited token, password, secret, credential and database
+URL values. A failed plugin-manager command does not claim success; a
 post-mutation verification failure triggers best-effort dependency rollback and
 reports loudly if rollback also fails.

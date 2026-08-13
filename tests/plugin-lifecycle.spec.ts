@@ -1,4 +1,11 @@
-import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -10,7 +17,11 @@ const temporaryRoots: string[] = [];
 
 afterEach(async () => {
   const { rm } = await import("node:fs/promises");
-  await Promise.all(temporaryRoots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+  await Promise.all(
+    temporaryRoots
+      .splice(0)
+      .map((path) => rm(path, { recursive: true, force: true })),
+  );
 });
 
 describe("plugin lifecycle", () => {
@@ -32,10 +43,11 @@ describe("plugin lifecycle", () => {
       profileStopped: true,
       cutoverSafe: true,
     });
-    expect(installed.checks.every((check) => check.status === "pass")).toBe(true);
+    expect(installed.checks.every((check) => check.status === "pass")).toBe(
+      true,
+    );
     expect((await readManifest(fixture.home, "web"))?.dependencies).toEqual({
-      "@mattheliu/session-teleport":
-        `github:omdsh-dev/session-teleport#${REVISION_ONE}`,
+      "@mattheliu/session-teleport": `github:omdsh-dev/session-teleport#${REVISION_ONE}`,
     });
 
     const credentialDir = join(fixture.home, "session-teleport", "writers");
@@ -52,11 +64,62 @@ describe("plugin lifecycle", () => {
         DSH_TELEPORT_URL: "https://teleport.example.invalid",
         DSH_TELEPORT_API_TOKEN: "fixture-token",
         DSH_TELEPORT_DEVICE_ID: "device-a",
+        DSH_TELEPORT_ENABLE: "1",
       },
     });
-    expect(diagnosed.checks.filter((check) => check.status === "fail")).toEqual([]);
+    expect(diagnosed.checks.filter((check) => check.status === "fail")).toEqual(
+      [],
+    );
     expect(diagnosed.checks).toContainEqual(
       expect.objectContaining({ name: "authority-health", status: "warn" }),
+    );
+
+    const safeDefault = await runPluginLifecycle({
+      ...fixture.options,
+      action: "doctor",
+      environment: {
+        ...fixture.options.environment,
+        DSH_TELEPORT_URL: "http://127.0.0.1:65534",
+      },
+    });
+    expect(
+      safeDefault.checks.filter((check) => check.status === "fail"),
+    ).toEqual([]);
+    expect(safeDefault.checks).toContainEqual(
+      expect.objectContaining({ name: "cutover-mode", status: "pass" }),
+    );
+    expect(safeDefault.checks).toContainEqual(
+      expect.objectContaining({ name: "authority-health", status: "pass" }),
+    );
+
+    const unavailableCutover = await runPluginLifecycle({
+      ...fixture.options,
+      action: "doctor",
+      environment: {
+        ...fixture.options.environment,
+        DSH_TELEPORT_ENABLE: "1",
+        DSH_TELEPORT_URL: "http://127.0.0.1:65534",
+      },
+    });
+    expect(unavailableCutover.checks).toContainEqual(
+      expect.objectContaining({ name: "authority-health", status: "fail" }),
+    );
+
+    const invalidHealthTimeout = await runPluginLifecycle({
+      ...fixture.options,
+      action: "doctor",
+      environment: {
+        ...fixture.options.environment,
+        DSH_TELEPORT_ENABLE: "1",
+        DSH_TELEPORT_URL: "http://127.0.0.1:65534",
+        DSH_TELEPORT_HEALTH_TIMEOUT_MS: "not-a-number",
+      },
+    });
+    expect(invalidHealthTimeout.checks).toContainEqual(
+      expect.objectContaining({ name: "health-timeout", status: "fail" }),
+    );
+    expect(invalidHealthTimeout.checks).toContainEqual(
+      expect.objectContaining({ name: "authority-health", status: "fail" }),
     );
 
     const uninstallPlan = await runPluginLifecycle({
@@ -64,7 +127,9 @@ describe("plugin lifecycle", () => {
       action: "uninstall",
     });
     expect(uninstallPlan.applied).toBe(false);
-    expect((await readManifest(fixture.home, "web"))?.dependencies).toBeDefined();
+    expect(
+      (await readManifest(fixture.home, "web"))?.dependencies,
+    ).toBeDefined();
     await runPluginLifecycle({
       ...fixture.options,
       action: "uninstall",
@@ -73,7 +138,9 @@ describe("plugin lifecycle", () => {
       cutoverSafe: true,
     });
     expect((await readManifest(fixture.home, "web"))?.dependencies).toEqual({});
-    await expect(readFile(credential, "utf8")).resolves.toBe("credential fixture");
+    await expect(readFile(credential, "utf8")).resolves.toBe(
+      "credential fixture",
+    );
     expect((await stat(credential)).mode & 0o777).toBe(0o600);
   });
 
@@ -202,9 +269,15 @@ async function readManifest(
   profile: string,
 ): Promise<{ dependencies?: Record<string, string> } | undefined> {
   try {
-    return JSON.parse(await readFile(join(home, "profiles", profile, "package.json"), "utf8"));
+    return JSON.parse(
+      await readFile(join(home, "profiles", profile, "package.json"), "utf8"),
+    );
   } catch (error: unknown) {
-    if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (
+      error instanceof Error &&
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    )
+      return undefined;
     throw error;
   }
 }
@@ -258,7 +331,7 @@ if (args.includes("--dump-config")) {
   } else if (broken) {
     process.stdout.write("- id: session-persistence-jsonl\\n  name: '@deepseek-ai/dsh-session-persistence-jsonl'\\n");
   } else {
-    process.stdout.write("- id: session-persistence-jsonl\\n  name: '@deepseek-ai/dsh-session-persistence-jsonl'\\n  disabled: true\\n- id: session-persistence-teleport\\n  name: '@mattheliu/session-teleport/dsh-adapter'\\n");
+    process.stdout.write("- id: session-persistence-jsonl\\n  name: '@deepseek-ai/dsh-session-persistence-jsonl'\\n  disabled: !!js process.env.DSH_TELEPORT_ENABLE === '1'\\n- id: session-persistence-teleport\\n  name: '@mattheliu/session-teleport/dsh-adapter'\\n  disabled: !!js process.env.DSH_TELEPORT_ENABLE !== '1'\\n");
   }
   process.exit(0);
 }
