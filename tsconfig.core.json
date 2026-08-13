@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/admin-cli.ts",
+    "src/authority.ts",
+    "src/canonical.ts",
+    "src/cli.ts",
+    "src/client.ts",
+    "src/credential-store.ts",
+    "src/database.ts",
+    "src/device-cli.ts",
+    "src/import-cli.ts",
+    "src/importer.ts",
+    "src/plugin-cli.ts",
+    "src/plugin-lifecycle.ts",
+    "src/schema.ts",
+    "src/server.ts",
+    "src/source-capture.ts",
+    "src/source-export-plugin.ts",
+    "src/types.ts",
+    "tests/**/*.ts"
+  ]
+}

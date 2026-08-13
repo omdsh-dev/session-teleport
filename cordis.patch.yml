@@ -1,0 +1,12 @@
+# Replace the base JSONL authority with Teleport for this profile.
+- id: session-persistence-jsonl
+  disabled: true
+
+- insert:
+    - id: session-persistence-teleport
+      name: '@mattheliu/session-teleport/dsh-adapter'
+      config:
+        baseUrl: !!js process.env.DSH_TELEPORT_URL ?? 'http://127.0.0.1:43127'
+        apiToken: !!js process.env.DSH_TELEPORT_API_TOKEN
+        deviceId: !!js process.env.DSH_TELEPORT_DEVICE_ID ?? process.env.HOSTNAME ?? 'local-device'
+        credentialDir: !!js dshHomePath('session-teleport', 'writers')

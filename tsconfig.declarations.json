@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.core.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"]
+  },
+  "include": [
+    "src/admin-cli.ts",
+    "src/authority.ts",
+    "src/canonical.ts",
+    "src/cli.ts",
+    "src/client.ts",
+    "src/credential-store.ts",
+    "src/database.ts",
+    "src/device-cli.ts",
+    "src/dsh-adapter.ts",
+    "src/import-cli.ts",
+    "src/importer.ts",
+    "src/index.ts",
+    "src/plugin-cli.ts",
+    "src/plugin-lifecycle.ts",
+    "src/schema.ts",
+    "src/server.ts",
+    "src/source-capture.ts",
+    "src/source-export-plugin.ts",
+    "src/types.ts"
+  ]
+}

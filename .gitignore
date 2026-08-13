@@ -1,0 +1,6 @@
+node_modules/
+.env
+coverage/
+*.tgz
+*.session-import.json
+.session-imports/

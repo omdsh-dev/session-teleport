@@ -1,0 +1,94 @@
+{
+  "name": "@mattheliu/session-teleport",
+  "version": "0.6.0-rc.1",
+  "private": true,
+  "description": "PostgreSQL-backed single-writer session handoff service for DeepSeek Harness",
+  "license": "BSD-3-Clause",
+  "type": "module",
+  "packageManager": "pnpm@10.12.3",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omdsh-dev/session-teleport.git"
+  },
+  "homepage": "https://github.com/omdsh-dev/session-teleport#readme",
+  "bugs": {
+    "url": "https://github.com/omdsh-dev/session-teleport/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "session",
+    "postgresql",
+    "persistence",
+    "handoff"
+  ],
+  "files": [
+    "dist",
+    "src",
+    "cordis.patch.yml",
+    "docs",
+    ".env.example",
+    "README.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./dsh-adapter": "./dist/dsh-adapter.js",
+    "./credential-store": "./dist/credential-store.js",
+    "./importer": "./dist/importer.js",
+    "./plugin-lifecycle": "./dist/plugin-lifecycle.js",
+    "./source-capture": "./dist/source-capture.js",
+    "./source-export-plugin": "./dist/source-export-plugin.js"
+  },
+  "bin": {
+    "dsh-teleport-server": "./dist/cli.js",
+    "dsh-teleport-device": "./dist/device-cli.js",
+    "dsh-teleport-admin": "./dist/admin-cli.js",
+    "dsh-teleport-import": "./dist/import-cli.js",
+    "dsh-teleport-plugin": "./dist/plugin-cli.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/*.ts --outdir=dist --platform=node --format=esm --target=node22 --sourcemap --sources-content=false && tsc -p tsconfig.declarations.json",
+    "start": "node dist/cli.js",
+    "device": "node dist/device-cli.js",
+    "admin": "node dist/admin-cli.js",
+    "test": "vitest run",
+    "test:lifecycle:local": "pnpm build && node scripts/plugin-profile-local.mjs",
+    "test:lifecycle:real": "pnpm build && node scripts/plugin-lifecycle-real.mjs",
+    "test:postgres": "vitest run tests/postgres.recovery.integration.spec.ts",
+    "typecheck:core": "tsc -p tsconfig.core.json",
+    "typecheck:adapter": "tsc -p tsconfig.adapter.json",
+    "typecheck": "pnpm typecheck:core && pnpm typecheck:adapter",
+    "verify:release": "node scripts/check-release-artifacts.mjs",
+    "pack:check": "node scripts/check-package-tarball.mjs",
+    "check": "pnpm typecheck && pnpm build && pnpm verify:release && pnpm test"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-session": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-session-persistence": "0.0.1-rc.5",
+    "@deepseek-ai/cordis": "^4.0.1-rc.4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.1-rc.4",
+    "@deepseek-ai/dsh-session": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-session-persistence": "0.0.1-rc.5",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.0.1-rc.5",
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^6.0.0",
+    "vitest": "^4.1.0"
+  }
+}

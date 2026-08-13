@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.core.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "src/dsh-adapter.ts",
+    "src/index.ts"
+  ]
+}
