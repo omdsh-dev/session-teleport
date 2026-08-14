@@ -9,7 +9,7 @@ DSH peer packages 是外部依赖，保留各自许可，不在本仓库中复�
 
 当前适配器使用 npm next 包做严格编译基线：`@deepseek-ai/cordis@4.0.1-rc.4`，
 以及 `@deepseek-ai/dsh-session`、`@deepseek-ai/dsh-session-persistence`、
-`@deepseek-ai/dsh-session-persistence-jsonl` 的 `0.0.1-rc.5`。这些精确版本只用于
+`@deepseek-ai/dsh-session-persistence-jsonl` 的 `0.1.0-rc.6`。这些精确版本只用于
 开发和验证；安装时仍由目标 DSH 环境按 `peerDependencies` 提供兼容版本。
 
 ## 能做什么
@@ -63,7 +63,7 @@ export DSH_TELEPORT_DEVICE_ID=office-mac
 export DSH_TELEPORT_HEALTH_TIMEOUT_MS=5000
 ```
 
-仅安装 bundle 不会切换 Session authority：默认仍使用 RC.5 自带 JSONL，Teleport
+仅安装 bundle 不会切换 Session authority：默认仍使用 RC.6 自带 JSONL，Teleport
 adapter 保持禁用。先启动 Teleport 服务并验证 `/health`，再停止 profile、设置
 `DSH_TELEPORT_ENABLE=1` 并重启，才会关闭 JSONL、启用 Teleport。显式启用后如果
 服务不可达，profile 会拒绝启动，不会静默回退到另一份权威存储。

@@ -43,7 +43,7 @@ is fail-safe: the bundle leaves the base JSONL authority enabled and inserts a
 disabled Teleport adapter after the base bundles.
 
 The published-package compatibility baseline is Cordis `4.0.1-rc.4` with DSH
-Session, Session Persistence and Session Persistence JSONL `0.0.1-rc.5`.
+Session, Session Persistence and Session Persistence JSONL `0.1.0-rc.6`.
 Development checks compile against those exact npm next packages; no DSH source
 checkout or generated package snapshot is used by the adapter typecheck.
 

@@ -29,6 +29,7 @@ const localLifecycle = await readFile(
 );
 
 assert(packageJson.private === true, "package.json must retain private: true");
+assert(packageJson.version === "0.6.0-rc.2", "release version must be RC.6 migration rc.2");
 assert(
   packageJson.license === "BSD-3-Clause",
   "package.json license must be BSD-3-Clause",
@@ -72,9 +73,9 @@ assert(
   ".npmrc must contain only the approved registry template",
 );
 const baselines = {
-  "@deepseek-ai/cordis": ["4.0.1-rc.4", "^4.0.1-rc.4"],
-  "@deepseek-ai/dsh-session": ["0.0.1-rc.5", "0.0.1-rc.5"],
-  "@deepseek-ai/dsh-session-persistence": ["0.0.1-rc.5", "0.0.1-rc.5"],
+  "@deepseek-ai/cordis": ["4.0.1", "^4.0.1"],
+  "@deepseek-ai/dsh-session": ["0.1.0-rc.6", "0.1.0-rc.6"],
+  "@deepseek-ai/dsh-session-persistence": ["0.1.0-rc.6", "0.1.0-rc.6"],
 };
 for (const [name, [development, peer]] of Object.entries(baselines)) {
   assert(
@@ -89,9 +90,19 @@ for (const [name, [development, peer]] of Object.entries(baselines)) {
 assert(
   packageJson.devDependencies?.[
     "@deepseek-ai/dsh-session-persistence-jsonl"
-  ] === "0.0.1-rc.5",
+  ] === "0.1.0-rc.6",
   "JSONL development baseline changed",
 );
+const workshop = packageJson.dshWorkshop;
+assert(workshop?.schema === "omdsh-workshop-package/v1", "Workshop schema changed");
+assert(workshop?.integration?.protocol === "harness-profile", "Workshop protocol must be harness-profile");
+assert(workshop?.integration?.artifact === "cordis.patch.yml", "Workshop artifact must be the bundle patch");
+assert(workshop?.install?.mode === "transactional", "Workshop install mode must be transactional");
+assert(workshop?.install?.adapter === "profile-bundle", "Workshop adapter must be profile-bundle");
+assert(workshop?.install?.failurePolicy === "generation-rollback", "Workshop failure policy must be generation-rollback");
+assert(workshop?.install?.touchesCurrentBeforeActivation === false, "candidate must not touch current before activation");
+assert(workshop?.lifecycle?.activation === "restart-profile", "Session authority cutover requires a profile restart");
+assert(workshop?.capability?.id === "session-persistence-teleport", "Workshop capability id changed");
 assert(
   bundlePatch.includes("process.env.DSH_TELEPORT_ENABLE === '1'"),
   "JSONL must remain enabled until explicit Teleport cutover",
@@ -124,8 +135,8 @@ for (const name of [
   "@deepseek-ai/dsh-typert-protocol",
 ]) {
   assert(
-    localLifecycle.includes(`\"${name}\": \"0.0.1-rc.5\"`),
-    `local lifecycle peer closure omits ${name}@0.0.1-rc.5`,
+    localLifecycle.includes(`\"${name}\": \"0.1.0-rc.6\"`),
+    `local lifecycle peer closure omits ${name}@0.1.0-rc.6`,
   );
 }
 for (const file of ["SECURITY.md", "CONTRIBUTING.md"]) {

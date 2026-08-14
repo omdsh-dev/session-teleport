@@ -15,7 +15,7 @@ Persistence and Cordis packages. Configure the target DSH installation to
 resolve those peers through its supported software sources before install. The
 lifecycle tool does not create or persist package-manager configuration. The
 current npm next validation baseline is Cordis `4.0.1-rc.4` and DSH Session,
-Session Persistence and Session Persistence JSONL `0.0.1-rc.5`.
+Session Persistence and Session Persistence JSONL `0.1.0-rc.6`.
 
 ## Bootstrap
 
