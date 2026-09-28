@@ -6,7 +6,21 @@ export interface SessionImportClient {
     rollbackImport(request: RollbackSessionImportRequest): Promise<RollbackSessionImportResult>;
 }
 export interface SessionSnapshotSource {
-    inspect(sessionId: string, signal?: AbortSignal): Promise<{
+    /** Current DSH handle seam; kept structural so the overlay has no runtime peers. */
+    open?(sessionId: string, access: "read", options?: {
+        signal?: AbortSignal;
+    }): Promise<{
+        header: unknown;
+        inheritedEventCount: number;
+        read(offset?: number, length?: number, options?: {
+            signal?: AbortSignal;
+        }): Promise<{
+            events: readonly unknown[];
+        }>;
+        close(): Promise<void>;
+    }>;
+    /** Legacy source profiles can still export an archival bundle. */
+    inspect?(sessionId: string, signal?: AbortSignal): Promise<{
         meta: unknown;
         events: readonly unknown[];
     }>;
@@ -21,8 +35,8 @@ export interface SessionImporterOptions {
     actorId?: string;
     now?: () => number;
 }
-/** Build a portable import file from any existing backend's consistent inspect result. */
-export declare function createSessionImportBundle(header: unknown, events: readonly unknown[]): SessionImportBundle;
+/** Build a portable import file from a consistent storage read. */
+export declare function createSessionImportBundle(header: unknown, events: readonly unknown[], inheritedEventCount?: number): SessionImportBundle;
 /** Read one consistent Session through the existing persistence seam. */
 export declare function exportSessionImportBundle(source: SessionSnapshotSource, sessionId: string, signal?: AbortSignal): Promise<SessionImportBundle>;
 /** Strictly validate identity, JSON shape and the exact contiguous event prefix. */

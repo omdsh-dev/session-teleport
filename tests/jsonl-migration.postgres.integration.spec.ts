@@ -101,7 +101,7 @@ integration("migration from real DSH JSONL to real PostgreSQL", () => {
       header: Record<string, unknown>;
       events: unknown[];
     };
-    expect(bundle.header).toMatchObject({ id: sessionId, version: 0 });
+    expect(bundle.header).toMatchObject({ id: sessionId, version: 4 });
     expect(bundle.events).toEqual(sourceEvents());
 
     await expect(runCli(cliPath, ["dry-run", bundlePath], environment)).resolves.toMatchObject({
@@ -154,8 +154,10 @@ export const inject = ["sessionPersistence"];
 export async function apply(ctx) {
   const id = process.env.DSH_TELEPORT_JSONL_SEED_SESSION_ID;
   const ready = process.env.DSH_TELEPORT_JSONL_SEED_READY_PATH;
-  await ctx.sessionPersistence.create({ version: 0, id, createdAt: 1000 });
-  await ctx.sessionPersistence.append(id, ${JSON.stringify(sourceEvents())});
+  const handle = await ctx.sessionPersistence.create({ version: 4, id, createdAt: 1000, isSeeded: false });
+  await handle.append(${JSON.stringify(sourceEvents())});
+  await handle.flush();
+  await handle.close();
   await writeFile(ready, JSON.stringify({ ok: true, id }) + "\\n", { mode: 0o600, flag: "wx" });
 }
 `, { mode: 0o600 });
@@ -195,12 +197,14 @@ function sourceEvents(): Array<Record<string, unknown>> {
   return [
     {
       type: "plugin/session-teleport-test",
+      ignorable: true,
       seq: 0,
       time: 1,
       data: { text: "from real JSONL", extension: { exact: true } },
     },
     {
       type: "plugin/session-teleport-test",
+      ignorable: true,
       seq: 1,
       time: 2,
       data: { text: "second event" },

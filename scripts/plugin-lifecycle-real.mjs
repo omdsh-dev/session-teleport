@@ -1,3 +1,4 @@
+import { peerSpecs as compatibilityPeers } from "./compatibility.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ const dshBin = requiredPath("DSH_TELEPORT_TEST_DSH_BIN");
 const fromRevision = requiredRevision("DSH_TELEPORT_TEST_FROM_REVISION");
 const toRevision = requiredRevision("DSH_TELEPORT_TEST_TO_REVISION");
 if (fromRevision === toRevision) throw new Error("lifecycle test revisions must differ");
-const peerSpecs = optionalPeerSpecs();
+const peerSpecs = compatibilityPeers();
 
 const root = await mkdtemp(join(tmpdir(), "session-teleport-real-lifecycle-"));
 const dshHome = join(root, "dsh-home");
@@ -115,36 +116,6 @@ function requiredRevision(name) {
 
 async function profileManifest(home, profile) {
   return JSON.parse(await readFile(join(home, "profiles", profile, "package.json"), "utf8"));
-}
-
-function optionalPeerSpecs() {
-  const variables = {
-    "@deepseek-ai/dsh-session": "DSH_TELEPORT_TEST_SESSION_SPEC",
-    "@deepseek-ai/dsh-session-persistence": "DSH_TELEPORT_TEST_SESSION_PERSISTENCE_SPEC",
-    "@deepseek-ai/dsh-session-persistence-jsonl": "DSH_TELEPORT_TEST_JSONL_SPEC",
-    "@deepseek-ai/cordis": "DSH_TELEPORT_TEST_CORDIS_SPEC",
-  };
-  const entries = Object.entries(variables).map(([dependency, name]) => [
-    dependency,
-    process.env[name]?.trim() ?? "",
-  ]);
-  if (entries.every(([, value]) => value.length === 0)) return undefined;
-  const missing = entries.filter(([, value]) => value.length === 0);
-  if (missing.length > 0) {
-    throw new Error(`peer package specs must be supplied together; missing ${missing.map(([name]) => name).join(", ")}`);
-  }
-  return {
-    ...Object.fromEntries(entries),
-    "@deepseek-ai/cordis-plugin-include": "1.0.6-rc.4",
-    "@deepseek-ai/cordis-plugin-loader": "1.0.2-rc.4",
-    "@deepseek-ai/dsh-attachment": "0.0.1-rc.5",
-    "@deepseek-ai/dsh-brand": "0.0.1-rc.5",
-    "@deepseek-ai/dsh-invariants": "0.0.1-rc.5",
-    "@deepseek-ai/dsh-llm": "0.0.1-rc.5",
-    "@deepseek-ai/dsh-scope": "0.0.1-rc.5",
-    "@deepseek-ai/dsh-timeout": "0.0.1-rc.5",
-    "@deepseek-ai/dsh-typert-protocol": "0.0.1-rc.5",
-  };
 }
 
 async function installPeers(specs) {

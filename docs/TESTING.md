@@ -7,18 +7,19 @@ without copying DSH packages or deployment-specific compatibility fixtures.
 ## Repository checks
 
 ```bash
-export NPM_TOKEN
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm check
 pnpm audit --prod
 ```
 
-The concrete read token belongs only in the process environment. The repository
-stores a literal `${NPM_TOKEN}` placeholder and the package gate rejects `.npmrc`
-from the tarball.
+Dependencies are public npm packages and CI needs no npm registry secret. The
+package gate rejects `.npmrc` from the tarball.
 
 The tests cover:
 
+- real DSH 0.2 handles and SessionStore event/flush routing, local writer locks,
+  read access, closure, aborts, handoff fencing and response-loss retries;
+- real JSONL fork export/import with the inherited boundary and format 4 restore;
 - authority CAS, fencing, handoff, idempotent admin recovery, audit and exact event replay;
 - HTTP authentication, malformed requests, explicit errors and SSE;
 - schema creation, migrations and fail-loud incompatible stores;
@@ -32,8 +33,8 @@ The tests cover:
   redaction and credential preservation across uninstall.
 
 `pnpm typecheck:adapter` strictly checks the adapter and public entry point
-against exact npm next development packages: Cordis `4.0.1-rc.4`, plus DSH
-Session, Session Persistence and Session Persistence JSONL `0.0.1-rc.5`.
+against pinned published development packages: Cordis `4.0.4`, plus DSH
+Session, Session Persistence and Session Persistence JSONL `0.2.0-rc.1`.
 `pnpm build` uses those real package types to regenerate declarations,
 JavaScript and source maps in `dist/`; it does not use a DSH source checkout or
 package snapshot. Repository installs use committed build output and deliberately
@@ -60,13 +61,19 @@ Point the opt-in test at the built CLI from a compatible DSH installation:
 
 ```bash
 DSH_TELEPORT_TEST_DSH_BIN=/absolute/path/to/dsh/bin.js \
-  pnpm vitest run tests/dsh-capture.integration.spec.ts
+  pnpm vitest run tests/dsh-adapter-loader.integration.spec.ts tests/dsh-capture.integration.spec.ts
 ```
 
-This boots a disposable Profile in the real DSH process, loads the temporary
-absolute `file://` export overlay, executes the public `capture` CLI, verifies
-the exact bundle and removes the fixture. No DSH package, fixture or snapshot is
-copied into this repository.
+These boot disposable Profiles in the real DSH process. The adapter probe loads
+the packaged provider and flushes a live Session through the HTTP service; the
+capture probe loads a temporary absolute `file://` export overlay, executes the
+public `capture` CLI and verifies the exact bundle. Both remove their fixtures.
+No DSH package, fixture or snapshot is copied into this repository.
+
+CI installs the official DSH `0.2.0-rc.1` CLI and runs these probes, the PostgreSQL
+recovery and migration gates below, and the local profile lifecycle check. Its
+PostgreSQL 17 service is disposable; integration files run sequentially to avoid
+concurrent first-time schema initialization.
 
 The complete opt-in migration test also needs a disposable real PostgreSQL
 database and exercises every public CLI step plus authoritative readback:
@@ -90,22 +97,22 @@ DSH_TELEPORT_TEST_DSH_BIN=/absolute/path/to/dsh/bin.js \
 ## Real plugin lifecycle check
 
 First validate the package tarball and DSH plugin composition. Supply a built
-DSH CLI plus the exact npm next baseline package specs:
+DSH CLI plus the pinned published baseline package specs:
 
 ```bash
 DSH_TELEPORT_TEST_DSH_BIN=/absolute/path/to/dsh/bin.js \
-DSH_TELEPORT_TEST_SESSION_SPEC=0.0.1-rc.5 \
-DSH_TELEPORT_TEST_SESSION_PERSISTENCE_SPEC=0.0.1-rc.5 \
-DSH_TELEPORT_TEST_JSONL_SPEC=0.0.1-rc.5 \
-DSH_TELEPORT_TEST_CORDIS_SPEC=4.0.1-rc.4 \
+DSH_TELEPORT_TEST_SESSION_SPEC=0.2.0-rc.1 \
+DSH_TELEPORT_TEST_SESSION_PERSISTENCE_SPEC=0.2.0-rc.1 \
+DSH_TELEPORT_TEST_JSONL_SPEC=0.2.0-rc.1 \
+DSH_TELEPORT_TEST_CORDIS_SPEC=4.0.4 \
   pnpm test:lifecycle:local
 ```
 
 This packs the current source, installs it into a disposable profile, checks
 the adapter and every packaged binary, verifies the safe JSONL default and the
 explicit `DSH_TELEPORT_ENABLE=1` cutover, then removes it and verifies the
-JSONL composition is restored. The script also installs the exact RC.5 peer
-closure needed to import the official persistence packages.
+JSONL composition is restored. The script defaults to the versions in `package.json`; the matching public transitive peer closure is installed explicitly because
+the profile manager does not auto-install those peers.
 
 After that, validate repository install and upgrade pins.
 
@@ -128,8 +135,7 @@ package-manager or Git configuration into the repository or test evidence.
 
 If the profile cannot resolve the peer packages through its normal software
 sources, supply the same four `DSH_TELEPORT_TEST_*_SPEC` variables used by the
-local lifecycle check. The variables must be provided together and affect only
-the disposable profile.
+local lifecycle check. Overrides affect only the disposable profile; omitted values use `package.json`.
 
 ## Compatibility boundary
 
@@ -151,3 +157,7 @@ The complete physical two-machine, TLS, network-fault, database-restart and
 backup/restore procedure is maintained in
 [Real-device acceptance](REAL_DEVICE_ACCEPTANCE.md). Those tests are required
 for a release candidate because simulation cannot prove deployment behavior.
+
+The default adapter tests use the official published DSH packages with PGlite
+behind the real HTTP service. They do not certify physical multi-host operation
+or replace the opt-in PostgreSQL connection-pool concurrency gates above.

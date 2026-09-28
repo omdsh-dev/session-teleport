@@ -25,20 +25,49 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
           scope: '@deepseek-ai'
-      - name: Install the pinned npm-next compatibility matrix
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          test -n "$NPM_TOKEN"
-          pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install pinned public compatibility packages
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm check
-        env:
-          NPM_TOKEN: post-install-placeholder
       - name: Verify committed build output
         run: git diff --exit-code -- dist
       - run: pnpm audit --prod
       - name: Verify package contents
-        env:
-          NPM_TOKEN: post-install-placeholder
         run: pnpm pack:check
+  dsh-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: teleport-test
+          POSTGRES_DB: teleport_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10.12.3
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install the official DSH compatibility target
+        run: npm install --prefix "$RUNNER_TEMP/dsh-runtime" --ignore-scripts --no-audit --no-fund @deepseek-ai/dsh@0.2.0-rc.1
+      - run: pnpm build
+      - name: Exercise the real DSH loader and PostgreSQL migration/recovery
+        env:
+          DSH_TELEPORT_TEST_DSH_BIN: ${{ runner.temp }}/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js
+          POSTGRES_TEST_URL: postgresql://postgres:teleport-test@127.0.0.1:5432/teleport_test
+        run: pnpm vitest run --no-file-parallelism tests/dsh-adapter-loader.integration.spec.ts tests/dsh-capture.integration.spec.ts tests/postgres.recovery.integration.spec.ts tests/migration.postgres.integration.spec.ts tests/jsonl-migration.postgres.integration.spec.ts
+      - name: Exercise profile install, cutover and uninstall
+        env:
+          DSH_TELEPORT_TEST_DSH_BIN: ${{ runner.temp }}/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js
+        run: node scripts/plugin-profile-local.mjs

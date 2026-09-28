@@ -16,7 +16,7 @@ dsh-teleport-import capture <source-profile> <session-id> \
 
 The command boots that profile once with a temporary absolute `file://`
 overlay. The overlay injects the profile's existing `sessionPersistence`, calls
-`inspect(sessionId)` and writes into an owner-only staging directory. The
+`open(sessionId, "read")` and `handle.read()` (legacy sources may use `inspect`) and writes into an owner-only staging directory. The
 parent validates the digest and shape, then atomically publishes the requested
 mode `0600` no-clobber file and requests normal DSH shutdown. A failed source
 boot therefore does not leave a final bundle. It never edits the
@@ -103,3 +103,11 @@ Rollback deliberately fails with `IMPORT_NOT_ROLLBACKABLE` after any Teleport
 append, accepted handoff or writer recovery. At that point the old backend is a
 stale prefix, so silently switching back would lose history. Recovery then
 requires a deliberate export/migration operation, not this lightweight path.
+
+Format 4 fork bundles carry `inheritedEventCount` outside the replayable event
+log. Capture always closes its read handle, including on error. Import digests
+include a seeded session's inherited count; a changed boundary is a conflict.
+Unseeded zero counts are normalized away to preserve older bundle digests.
+Empty sessions can be imported and rolled back before any subsequent mutation.
+Import preserves historical data verbatim; it does not upgrade a retired DSH
+format or invent missing fork metadata. The 0.2 adapter refuses those logs.

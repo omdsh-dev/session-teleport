@@ -1,6 +1,6 @@
 import type { SqlDatabase } from "./database.js";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 const STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS teleport_schema_meta (
@@ -18,6 +18,8 @@ const STATEMENTS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
+  `ALTER TABLE teleport_sessions ADD COLUMN IF NOT EXISTS inherited_event_count BIGINT
+    CHECK (inherited_event_count >= 0)`,
   `CREATE TABLE IF NOT EXISTS teleport_events (
     session_id TEXT NOT NULL REFERENCES teleport_sessions(session_id) ON DELETE CASCADE,
     seq BIGINT NOT NULL CHECK (seq >= 0),
@@ -70,7 +72,7 @@ const STATEMENTS = [
     actor_id TEXT NOT NULL,
     reason TEXT NOT NULL,
     rolled_back_revision BIGINT NOT NULL CHECK (rolled_back_revision >= 1),
-    rolled_back_next_seq BIGINT NOT NULL CHECK (rolled_back_next_seq >= 1),
+    rolled_back_next_seq BIGINT NOT NULL CHECK (rolled_back_next_seq >= 0),
     rolled_back_writer_epoch BIGINT NOT NULL CHECK (rolled_back_writer_epoch >= 1),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (session_id, import_idempotency_key)
@@ -90,6 +92,13 @@ export async function initializeSchema(database: SqlDatabase): Promise<void> {
         [String(SCHEMA_VERSION)],
       );
       return;
+    }
+    if ([1, 2, 3, 4].includes(Number(version))) {
+      await transaction.query(`ALTER TABLE teleport_import_rollback_audit
+        DROP CONSTRAINT IF EXISTS teleport_import_rollback_audit_rolled_back_next_seq_check`);
+      await transaction.query(`ALTER TABLE teleport_import_rollback_audit
+        ADD CONSTRAINT teleport_import_rollback_audit_rolled_back_next_seq_check
+        CHECK (rolled_back_next_seq >= 0)`);
     }
     if (Number(version) === 1) {
       // v1 used JSONB, which reorders object keys. JSON preserves the DSH event
@@ -119,7 +128,7 @@ export async function initializeSchema(database: SqlDatabase): Promise<void> {
       );
       return;
     }
-    if (Number(version) === 3) {
+    if (Number(version) === 3 || Number(version) === 4) {
       await transaction.query(
         `UPDATE teleport_schema_meta SET value = $1 WHERE key = 'schema_version'`,
         [String(SCHEMA_VERSION)],

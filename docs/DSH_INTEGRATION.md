@@ -6,7 +6,6 @@ The Teleport service and the DSH adapter run separately. DSH clients call the
 HTTP API and never receive database credentials.
 
 ```bash
-export NPM_TOKEN
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm build
 
@@ -42,9 +41,10 @@ install does not need to execute repository build scripts. Installation alone
 is fail-safe: the bundle leaves the base JSONL authority enabled and inserts a
 disabled Teleport adapter after the base bundles.
 
-The published-package compatibility baseline is Cordis `4.0.1-rc.4` with DSH
-Session, Session Persistence and Session Persistence JSONL `0.1.0-rc.6`.
-Development checks compile against those exact npm next packages; no DSH source
+The published-package compatibility baseline is Cordis `4.0.4` with DSH
+Session, Session Persistence and Session Persistence JSONL `0.2.0-rc.1`.
+This targets DSH `0.2.0-rc.1` (`next`, a prerelease as of 2026-09-28).
+Development checks compile against these pinned public packages; no DSH source
 checkout or generated package snapshot is used by the adapter typecheck.
 
 Set these values on every device that runs the profile:
@@ -65,6 +65,30 @@ falling back to a different authority.
 Writer credentials live under `$DSH_HOME/session-teleport/writers`. Filenames
 are SHA-256 identifiers and files use mode 0600. This is OS file-permission
 protection, not hardware-backed or Keychain encryption.
+
+All profiles on one device must share that credential directory. The adapter
+holds an OS file lock per write handle (macOS/Linux); closing the handle or
+exiting the process releases it. Never copy live writer credentials to a second
+directory/device: use handoff instead. Independent read handles do not acquire
+the writer lock. Cross-device ownership remains fenced by PostgreSQL epochs.
+
+### Upgrade from the previous adapter
+
+Upgrade the authority service and plugin together. Schema 5 adds nullable
+`inherited_event_count` without rewriting existing event rows and permits empty
+import rollback records. Old authority binaries cannot serve the new contract.
+A seeded format 4 session requires its exact inherited count; missing metadata
+is refused rather than inferred. The adapter only opens logical format 4 logs.
+For historical JSONL, capture from a compatible source backend that performs
+its supported migration; a legacy `inspect()` export remains archival and is
+not automatically made resumable by importing it. Back up before changing
+versions; do not downgrade the service after schema 5 is installed.
+
+The adapter now implements `create/open → SessionHandle`, `stat/list`, and
+service `flush`. A write handle accepts contiguous appends, durably materializes
+an empty session, flushes live `session/event` batches at `session/flush`, and
+releases its lock on `close`. Reads return detached event values. Old coordinator
+and backend methods are no longer exposed.
 
 ### Restart boundary
 

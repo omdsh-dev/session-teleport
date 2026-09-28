@@ -6,20 +6,18 @@ Use a supported Node.js version and the package-manager version declared in
 `package.json`:
 
 ```bash
-export NPM_TOKEN
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm check
 pnpm pack:check
 ```
 
-The committed `.npmrc` contains only the registry scope and the literal
-`${NPM_TOKEN}` placeholder. Keep the concrete token in the process environment;
-never write it into a repository file, log, issue or test fixture.
+Dependencies are public npm packages; no npm token is required. Keep credentials
+out of repository files, logs, issues and test fixtures.
 
 `pnpm build` updates the committed `dist/` output. A source change and its
 generated output belong in the same review. Source maps must remain relative
 and must not embed source text. `pnpm typecheck:adapter` checks
-`src/dsh-adapter.ts` and `src/index.ts` strictly against the exact npm next
+`src/dsh-adapter.ts` and `src/index.ts` strictly against the pinned published
 development baselines declared in `package.json`; declaration generation uses
 the same real package types.
 

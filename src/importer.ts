@@ -26,10 +26,15 @@ export interface SessionImportClient {
 }
 
 export interface SessionSnapshotSource {
-  inspect(
-    sessionId: string,
-    signal?: AbortSignal,
-  ): Promise<{ meta: unknown; events: readonly unknown[] }>;
+  /** Current DSH handle seam; kept structural so the overlay has no runtime peers. */
+  open?(sessionId: string, access: "read", options?: { signal?: AbortSignal }): Promise<{
+    header: unknown;
+    inheritedEventCount: number;
+    read(offset?: number, length?: number, options?: { signal?: AbortSignal }): Promise<{ events: readonly unknown[] }>;
+    close(): Promise<void>;
+  }>;
+  /** Legacy source profiles can still export an archival bundle. */
+  inspect?(sessionId: string, signal?: AbortSignal): Promise<{ meta: unknown; events: readonly unknown[] }>;
 }
 
 export interface ImportReceiptStore {
@@ -44,15 +49,17 @@ export interface SessionImporterOptions {
   now?: () => number;
 }
 
-/** Build a portable import file from any existing backend's consistent inspect result. */
+/** Build a portable import file from a consistent storage read. */
 export function createSessionImportBundle(
   header: unknown,
   events: readonly unknown[],
+  inheritedEventCount?: number,
 ): SessionImportBundle {
   return parseSessionImportBundle({
     format: SESSION_IMPORT_FORMAT,
     header,
     events,
+    ...(inheritedEventCount === undefined ? {} : { inheritedEventCount }),
   });
 }
 
@@ -64,9 +71,24 @@ export async function exportSessionImportBundle(
 ): Promise<SessionImportBundle> {
   assertIdentifier(sessionId, "sessionId");
   signal?.throwIfAborted();
-  const snapshot = await source.inspect(sessionId, signal);
-  signal?.throwIfAborted();
-  const bundle = createSessionImportBundle(snapshot.meta, snapshot.events);
+  let bundle: SessionImportBundle;
+  if (source.open !== undefined) {
+    const options = signal === undefined ? {} : { signal };
+    const handle = await source.open(sessionId, "read", options);
+    try {
+      const snapshot = await handle.read(0, undefined, options);
+      signal?.throwIfAborted();
+      bundle = createSessionImportBundle(handle.header, snapshot.events, handle.inheritedEventCount);
+    } finally {
+      await handle.close();
+    }
+  } else if (source.inspect !== undefined) {
+    const snapshot = await source.inspect(sessionId, signal);
+    signal?.throwIfAborted();
+    bundle = createSessionImportBundle(snapshot.meta, snapshot.events);
+  } else {
+    throw new TypeError("source persistence supports neither open nor inspect");
+  }
   if (sessionIdOf(bundle) !== sessionId) {
     throw new TeleportError(
       "BAD_REQUEST",
@@ -97,8 +119,8 @@ export function parseSessionImportBundle(value: unknown): SessionImportBundle {
   }
   const sessionId = (candidate.header as Record<string, unknown>).id;
   assertIdentifier(sessionId, "import bundle header.id");
-  if (!Array.isArray(candidate.events) || candidate.events.length === 0) {
-    throw new TeleportError("BAD_REQUEST", "import bundle requires at least one event");
+  if (!Array.isArray(candidate.events)) {
+    throw new TeleportError("BAD_REQUEST", "import bundle events must be an array");
   }
   for (const [index, value] of candidate.events.entries()) {
     if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -129,12 +151,23 @@ export function parseSessionImportBundle(value: unknown): SessionImportBundle {
       }
     }
   }
+  const seeded = (candidate.header as Record<string, unknown>).isSeeded === true;
+  if (seeded && candidate.inheritedEventCount === undefined) {
+    throw new TeleportError("BAD_REQUEST", "seeded import requires inheritedEventCount");
+  }
+  if (candidate.inheritedEventCount !== undefined) {
+    safeNonNegative(candidate.inheritedEventCount, "inheritedEventCount");
+    if ((!seeded && candidate.inheritedEventCount !== 0) || candidate.inheritedEventCount > candidate.events.length) {
+      throw new TeleportError("BAD_REQUEST", "inheritedEventCount does not match the imported prefix");
+    }
+  }
   canonicalJson(candidate.header);
   canonicalJson(candidate.events);
   return structuredClone({
     format: SESSION_IMPORT_FORMAT,
     header: candidate.header,
     events: candidate.events,
+    ...(seeded ? { inheritedEventCount: candidate.inheritedEventCount! } : {}),
   });
 }
 
@@ -144,6 +177,7 @@ export function sessionImportDigest(bundle: SessionImportBundle): string {
     canonicalJson({
       format: parsed.format,
       header: parsed.header,
+      ...(parsed.inheritedEventCount === undefined ? {} : { inheritedEventCount: parsed.inheritedEventCount }),
       // PostgreSQL JSON preserves event-object key order. Bind the digest to
       // each original envelope encoding while keeping JSONB header order neutral.
       eventJson: parsed.events.map((event) => JSON.stringify(event)),
@@ -243,6 +277,7 @@ export class SessionImporter {
     const result = await this.client.materializeSession({
       sessionId: plan.sessionId,
       header: bundle.header,
+      ...(bundle.inheritedEventCount === undefined ? {} : { inheritedEventCount: bundle.inheritedEventCount }),
       deviceId: writer.deviceId,
       writerToken: writer.writerToken,
       idempotencyKey,
@@ -398,7 +433,7 @@ function sessionIdOf(bundle: SessionImportBundle): string {
 
 function snapshotDigest(snapshot: SessionSnapshot): string {
   return sessionImportDigest(
-    createSessionImportBundle(snapshot.header, snapshot.events),
+    createSessionImportBundle(snapshot.header, snapshot.events, snapshot.inheritedEventCount),
   );
 }
 
@@ -417,7 +452,7 @@ function validateReceipt(value: unknown, expectedSessionId: string): SessionImpo
     ) ||
     receipt.revision !== 1 ||
     !Number.isSafeInteger(receipt.nextSeq) ||
-    receipt.nextSeq! < 1 ||
+    receipt.nextSeq! < 0 ||
     receipt.writerEpoch !== 1 ||
     typeof receipt.deviceId !== "string" ||
     receipt.deviceId.length === 0 ||

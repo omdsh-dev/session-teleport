@@ -28,6 +28,7 @@ import { TeleportError } from "./types.js";
 interface SessionRow {
   session_id: string;
   header: unknown;
+  inherited_event_count: string | number | null;
   revision: string | number;
   next_seq: string | number;
   writer_epoch: string | number;
@@ -101,15 +102,16 @@ export class TeleportAuthority {
   async createSession(request: CreateSessionRequest): Promise<CreateSessionResult> {
     assertIdentifier(request.sessionId, "sessionId");
     assertIdentifier(request.deviceId, "deviceId");
+    if (request.inheritedEventCount !== undefined) safeNonNegative(request.inheritedEventCount, "inheritedEventCount");
     const header = canonicalJson(request.header);
     const writerToken = secret();
     const inserted = await this.database.query<{ session_id: string }>(
       `INSERT INTO teleport_sessions
-        (session_id, header, writer_epoch, writer_device_id, writer_token_hash)
-       VALUES ($1, $2::jsonb, 1, $3, $4)
+        (session_id, header, writer_epoch, writer_device_id, writer_token_hash, inherited_event_count)
+       VALUES ($1, $2::jsonb, 1, $3, $4, $5)
        ON CONFLICT (session_id) DO NOTHING
        RETURNING session_id`,
-      [request.sessionId, header, request.deviceId, sha256(writerToken)],
+      [request.sessionId, header, request.deviceId, sha256(writerToken), request.inheritedEventCount ?? null],
     );
     if (inserted.rowCount !== 1) {
       throw new TeleportError("SESSION_EXISTS", `session "${request.sessionId}" already exists`);
@@ -139,12 +141,14 @@ export class TeleportAuthority {
       expectedNextSeq: 0,
       idempotencyKey: request.idempotencyKey,
       events: request.events,
-    });
+    }, true);
+    if (request.inheritedEventCount !== undefined) safeNonNegative(request.inheritedEventCount, "inheritedEventCount");
     const header = canonicalJson(request.header);
     const digest = sha256(
       canonicalJson({
         sessionId: request.sessionId,
         header: request.header,
+        ...(request.inheritedEventCount === undefined ? {} : { inheritedEventCount: request.inheritedEventCount }),
         deviceId: request.deviceId,
         events: request.events,
       }),
@@ -153,11 +157,11 @@ export class TeleportAuthority {
     const result = await this.database.transaction(async (transaction) => {
       const inserted = await transaction.query<{ session_id: string }>(
         `INSERT INTO teleport_sessions
-          (session_id, header, writer_epoch, writer_device_id, writer_token_hash)
-         VALUES ($1, $2::jsonb, 1, $3, $4)
+          (session_id, header, writer_epoch, writer_device_id, writer_token_hash, inherited_event_count)
+         VALUES ($1, $2::jsonb, 1, $3, $4, $5)
          ON CONFLICT (session_id) DO NOTHING
          RETURNING session_id`,
-        [request.sessionId, header, request.deviceId, sha256(request.writerToken)],
+        [request.sessionId, header, request.deviceId, sha256(request.writerToken), request.inheritedEventCount ?? null],
       );
 
       if (inserted.rowCount !== 1) {
@@ -192,7 +196,7 @@ export class TeleportAuthority {
           [request.sessionId, event.seq, eventJson(event)],
         );
       }
-      const nextSeq = request.events.at(-1)!.seq + 1;
+      const nextSeq = request.events.length;
       await transaction.query(
         `UPDATE teleport_sessions
             SET revision = 1, next_seq = $2, updated_at = CURRENT_TIMESTAMP
@@ -208,7 +212,7 @@ export class TeleportAuthority {
           request.sessionId,
           request.idempotencyKey,
           digest,
-          request.events.at(-1)!.seq,
+          nextSeq - 1,
           nextSeq,
         ],
       );
@@ -325,7 +329,7 @@ export class TeleportAuthority {
     return this.database.transaction(
       async (transaction) => {
         const sessionResult = await transaction.query<SessionRow>(
-          `SELECT session_id, header, revision, next_seq, writer_epoch,
+          `SELECT session_id, header, inherited_event_count, revision, next_seq, writer_epoch,
                   writer_device_id, writer_token_hash
              FROM teleport_sessions WHERE session_id = $1`,
           [sessionId],
@@ -343,6 +347,9 @@ export class TeleportAuthority {
         return {
           sessionId,
           header: asJsonValue(session.header),
+          ...(session.inherited_event_count == null ? {} : {
+            inheritedEventCount: integer(session.inherited_event_count, "inherited_event_count"),
+          }),
           revision: integer(session.revision, "revision"),
           nextSeq: integer(session.next_seq, "next_seq"),
           writerEpoch: integer(session.writer_epoch, "writer_epoch"),
@@ -359,7 +366,7 @@ export class TeleportAuthority {
   async head(sessionId: string): Promise<SessionHead> {
     assertIdentifier(sessionId, "sessionId");
     const result = await this.database.query<SessionRow>(
-      `SELECT session_id, header, revision, next_seq, writer_epoch,
+      `SELECT session_id, header, inherited_event_count, revision, next_seq, writer_epoch,
               writer_device_id, writer_token_hash
          FROM teleport_sessions WHERE session_id = $1`,
       [sessionId],
@@ -373,7 +380,7 @@ export class TeleportAuthority {
 
   async listHeads(): Promise<SessionHead[]> {
     const result = await this.database.query<SessionRow>(
-      `SELECT session_id, header, revision, next_seq, writer_epoch,
+      `SELECT session_id, header, inherited_event_count, revision, next_seq, writer_epoch,
               writer_device_id, writer_token_hash
          FROM teleport_sessions
         ORDER BY created_at, session_id`,
@@ -809,7 +816,7 @@ export class TeleportAuthority {
 
 async function lockSession(transaction: SqlExecutor, sessionId: string): Promise<SessionRow> {
   const result = await transaction.query<SessionRow>(
-    `SELECT session_id, header, revision, next_seq, writer_epoch,
+    `SELECT session_id, header, inherited_event_count, revision, next_seq, writer_epoch,
             writer_device_id, writer_token_hash
        FROM teleport_sessions
       WHERE session_id = $1
@@ -842,6 +849,9 @@ function headFromRow(session: SessionRow): SessionHead {
   return {
     sessionId: session.session_id,
     header: asJsonValue(session.header),
+    ...(session.inherited_event_count == null ? {} : {
+      inheritedEventCount: integer(session.inherited_event_count, "inherited_event_count"),
+    }),
     revision: integer(session.revision, "revision"),
     nextSeq: integer(session.next_seq, "next_seq"),
     writerEpoch: integer(session.writer_epoch, "writer_epoch"),
@@ -851,7 +861,7 @@ function headFromRow(session: SessionRow): SessionHead {
   };
 }
 
-function validateAppend(request: AppendRequest): void {
+function validateAppend(request: AppendRequest, allowEmpty = false): void {
   assertIdentifier(request.sessionId, "sessionId");
   assertWriterCredentials(request.writer);
   assertIdentifier(request.writer.deviceId, "writer.deviceId");
@@ -860,7 +870,7 @@ function validateAppend(request: AppendRequest): void {
   safeNonNegative(request.writer.writerEpoch, "writer.writerEpoch");
   safeNonNegative(request.expectedRevision, "expectedRevision");
   safeNonNegative(request.expectedNextSeq, "expectedNextSeq");
-  if (!Array.isArray(request.events) || request.events.length === 0) {
+  if (!Array.isArray(request.events) || (!allowEmpty && request.events.length === 0)) {
     throw new TeleportError("BAD_REQUEST", "append requires at least one event");
   }
   for (const [index, value] of request.events.entries()) {
@@ -922,7 +932,7 @@ function validateImportRollback(request: RollbackSessionImportRequest): void {
   assertIdentifier(request.importIdempotencyKey, "importIdempotencyKey");
   assertIdentifier(request.actorId, "actorId");
   safePositive(request.expectedRevision, "expectedRevision");
-  safePositive(request.expectedNextSeq, "expectedNextSeq");
+  safeNonNegative(request.expectedNextSeq, "expectedNextSeq");
   safePositive(request.expectedWriterEpoch, "expectedWriterEpoch");
   if (typeof request.reason !== "string" || request.reason.trim().length === 0) {
     throw new TeleportError("BAD_REQUEST", "rollback reason is required");
