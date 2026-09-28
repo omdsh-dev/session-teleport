@@ -25,7 +25,7 @@ export interface ProfileCaptureOptions {
     environment?: NodeJS.ProcessEnv;
     sourcePluginUrl?: string;
 }
-/** Export one consistent inspect() result to a no-clobber owner-only file. */
+/** Export one consistent storage read to a no-clobber owner-only file. */
 export declare function captureSessionBundle(source: SessionSnapshotSource, sessionId: string, outputPath: string, sourceBackend?: string, signal?: AbortSignal): Promise<SessionCaptureResult>;
 /** Publish a sensitive bundle atomically without ever replacing an existing path. */
 export declare function writeSessionImportBundle(outputPath: string, value: unknown): Promise<number>;

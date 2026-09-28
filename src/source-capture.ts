@@ -51,7 +51,7 @@ export interface ProfileCaptureOptions {
   sourcePluginUrl?: string;
 }
 
-/** Export one consistent inspect() result to a no-clobber owner-only file. */
+/** Export one consistent storage read to a no-clobber owner-only file. */
 export async function captureSessionBundle(
   source: SessionSnapshotSource,
   sessionId: string,

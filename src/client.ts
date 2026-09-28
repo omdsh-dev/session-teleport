@@ -41,12 +41,20 @@ export class TeleportClient {
     this.baseUrl = baseUrl.replace(/\/$/, "");
   }
 
-  async health(signal?: AbortSignal): Promise<void> {
+  async health(signal?: AbortSignal, requiredSchemaVersion?: number): Promise<void> {
     const response = await fetch(`${this.baseUrl}/health`, {
       ...(signal === undefined ? {} : { signal }),
     });
     if (response.ok) {
-      await response.arrayBuffer();
+      if (requiredSchemaVersion === undefined) {
+        await response.arrayBuffer();
+      } else {
+        const body = await response.json() as { schemaVersion?: number };
+        if (body.schemaVersion !== requiredSchemaVersion) {
+          throw new TeleportRemoteError(409, "SCHEMA_INCOMPATIBLE",
+            `Teleport authority must run schema ${requiredSchemaVersion}; upgrade the service with the adapter`);
+        }
+      }
       return;
     }
     let message = `Teleport service returned HTTP ${response.status}`;
@@ -68,18 +76,19 @@ export class TeleportClient {
     return this.request("POST", "/v1/sessions/materialize", request);
   }
 
-  listHeads(): Promise<SessionHead[]> {
-    return this.request("GET", "/v1/sessions");
+  listHeads(signal?: AbortSignal): Promise<SessionHead[]> {
+    return this.request("GET", "/v1/sessions", undefined, false, signal);
   }
 
-  head(sessionId: string): Promise<SessionHead> {
-    return this.request("GET", `/v1/sessions/${encodeURIComponent(sessionId)}/head`);
+  head(sessionId: string, signal?: AbortSignal): Promise<SessionHead> {
+    return this.request("GET", `/v1/sessions/${encodeURIComponent(sessionId)}/head`, undefined, false, signal);
   }
 
-  snapshot(sessionId: string, afterSeq = -1): Promise<SessionSnapshot> {
+  snapshot(sessionId: string, afterSeq = -1, signal?: AbortSignal): Promise<SessionSnapshot> {
     return this.request(
       "GET",
       `/v1/sessions/${encodeURIComponent(sessionId)}?after=${afterSeq}`,
+      undefined, false, signal,
     );
   }
 
@@ -150,12 +159,14 @@ export class TeleportClient {
     path: string,
     body?: unknown,
     admin = false,
+    signal?: AbortSignal,
   ): Promise<T> {
     if (admin && this.adminToken === undefined) {
       throw new Error("Teleport admin token is required for this operation");
     }
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
+      ...(signal === undefined ? {} : { signal }),
       headers: {
         ...(this.apiToken === undefined ? {} : { authorization: `Bearer ${this.apiToken}` }),
         ...(admin ? { "x-teleport-admin-token": this.adminToken! } : {}),

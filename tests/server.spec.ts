@@ -30,6 +30,8 @@ describe("Teleport HTTP API", () => {
   it("exposes create, append, snapshot and handoff as one authenticated vertical slice", async () => {
     expect((await fetch(`${baseUrl}/health`)).status).toBe(200);
     await expect(new TeleportClient(baseUrl).health()).resolves.toBeUndefined();
+    await expect(new TeleportClient(baseUrl).health(undefined, 5)).resolves.toBeUndefined();
+    await expect(new TeleportClient(baseUrl).health(undefined, 4)).rejects.toMatchObject({ code: "SCHEMA_INCOMPATIBLE" });
     expect((await fetch(`${baseUrl}/v1/sessions/demo`)).status).toBe(401);
     const headers = { authorization: "Bearer test-token", "content-type": "application/json" };
 

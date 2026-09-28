@@ -1,3 +1,4 @@
+import { SCHEMA_VERSION } from "./schema.js";
 import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { TeleportError } from "./types.js";
@@ -9,7 +10,7 @@ function createTeleportServer(authority, options = {}) {
       if (request.url === "/health") {
         try {
           await authority.checkHealth();
-          sendJson(response, 200, { ok: true, database: "ready" });
+          sendJson(response, 200, { ok: true, database: "ready", schemaVersion: SCHEMA_VERSION });
         } catch {
           sendJson(response, 503, { ok: false, database: "unavailable" });
         }

@@ -23,13 +23,9 @@ const lifecycleGuide = await readFile(
   join(projectDir, "docs/PLUGIN_LIFECYCLE.md"),
   "utf8",
 );
-const localLifecycle = await readFile(
-  join(projectDir, "scripts/plugin-profile-local.mjs"),
-  "utf8",
-);
 
 assert(packageJson.private === true, "package.json must retain private: true");
-assert(packageJson.version === "0.6.0-rc.2", "release version must be RC.6 migration rc.2");
+assert(packageJson.version === "0.7.0-rc.1", "release version must match the DSH 0.2 adapter candidate");
 assert(
   packageJson.license === "BSD-3-Clause",
   "package.json license must be BSD-3-Clause",
@@ -65,17 +61,16 @@ assert(
 assert(
   npmrc ===
     [
-      "auto-install-peers=false",
+      "auto-install-peers=true",
       "@deepseek-ai:registry=https://registry.npmjs.org/",
-      "//registry.npmjs.org/:_authToken=${NPM_TOKEN}",
       "",
     ].join("\n"),
   ".npmrc must contain only the approved registry template",
 );
 const baselines = {
-  "@deepseek-ai/cordis": ["4.0.1", "^4.0.1"],
-  "@deepseek-ai/dsh-session": ["0.1.0-rc.6", "0.1.0-rc.6"],
-  "@deepseek-ai/dsh-session-persistence": ["0.1.0-rc.6", "0.1.0-rc.6"],
+  "@deepseek-ai/cordis": ["4.0.4", "~4.0.4"],
+  "@deepseek-ai/dsh-session": ["0.2.0-rc.1", "0.2.0-rc.1"],
+  "@deepseek-ai/dsh-session-persistence": ["0.2.0-rc.1", "0.2.0-rc.1"],
 };
 for (const [name, [development, peer]] of Object.entries(baselines)) {
   assert(
@@ -90,7 +85,7 @@ for (const [name, [development, peer]] of Object.entries(baselines)) {
 assert(
   packageJson.devDependencies?.[
     "@deepseek-ai/dsh-session-persistence-jsonl"
-  ] === "0.1.0-rc.6",
+  ] === "0.2.0-rc.1",
   "JSONL development baseline changed",
 );
 const workshop = packageJson.dshWorkshop;
@@ -123,20 +118,6 @@ for (const [name, content] of [
   assert(
     content.includes("DSH_TELEPORT_ENABLE=1"),
     `${name} omits the explicit cutover gate`,
-  );
-}
-for (const name of [
-  "@deepseek-ai/dsh-attachment",
-  "@deepseek-ai/dsh-brand",
-  "@deepseek-ai/dsh-invariants",
-  "@deepseek-ai/dsh-llm",
-  "@deepseek-ai/dsh-scope",
-  "@deepseek-ai/dsh-timeout",
-  "@deepseek-ai/dsh-typert-protocol",
-]) {
-  assert(
-    localLifecycle.includes(`\"${name}\": \"0.1.0-rc.6\"`),
-    `local lifecycle peer closure omits ${name}@0.1.0-rc.6`,
   );
 }
 for (const file of ["SECURITY.md", "CONTRIBUTING.md"]) {

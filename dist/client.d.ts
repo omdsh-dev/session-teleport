@@ -10,12 +10,12 @@ export declare class TeleportClient {
     private readonly adminToken?;
     private readonly baseUrl;
     constructor(baseUrl: string, apiToken?: string | undefined, adminToken?: string | undefined);
-    health(signal?: AbortSignal): Promise<void>;
+    health(signal?: AbortSignal, requiredSchemaVersion?: number): Promise<void>;
     createSession(request: CreateSessionRequest): Promise<CreateSessionResult>;
     materializeSession(request: MaterializeSessionRequest): Promise<MaterializeSessionResult>;
-    listHeads(): Promise<SessionHead[]>;
-    head(sessionId: string): Promise<SessionHead>;
-    snapshot(sessionId: string, afterSeq?: number): Promise<SessionSnapshot>;
+    listHeads(signal?: AbortSignal): Promise<SessionHead[]>;
+    head(sessionId: string, signal?: AbortSignal): Promise<SessionHead>;
+    snapshot(sessionId: string, afterSeq?: number, signal?: AbortSignal): Promise<SessionSnapshot>;
     append(request: AppendRequest): Promise<AppendResult>;
     createHandoff(request: CreateHandoffRequest): Promise<CreateHandoffResult>;
     acceptHandoff(request: AcceptHandoffRequest): Promise<AcceptHandoffResult>;

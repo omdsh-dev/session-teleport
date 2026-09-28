@@ -16,6 +16,8 @@ export const SESSION_IMPORT_FORMAT = "dsh-session-teleport/import-v1" as const;
 
 /** Portable, backend-neutral snapshot produced from an existing Session. */
 export interface SessionImportBundle {
+  /** Exact fork prefix length, separate from the immutable DSH header. */
+  inheritedEventCount?: number;
   format: typeof SESSION_IMPORT_FORMAT;
   header: JsonValue;
   events: TeleportEvent[];
@@ -72,6 +74,8 @@ export interface WriterCredentials {
 }
 
 export interface CreateSessionRequest {
+  /** Exact fork prefix length, separate from the immutable DSH header. */
+  inheritedEventCount?: number;
   sessionId: string;
   header: JsonValue;
   deviceId: string;
@@ -86,6 +90,8 @@ export interface CreateSessionResult {
 
 /** Atomic first materialization used by the lazy-create adapter. */
 export interface MaterializeSessionRequest {
+  /** Exact fork prefix length, separate from the immutable DSH header. */
+  inheritedEventCount?: number;
   sessionId: string;
   header: JsonValue;
   deviceId: string;
@@ -114,6 +120,8 @@ export interface AppendResult {
 }
 
 export interface SessionSnapshot {
+  /** Exact fork prefix length, separate from the immutable DSH header. */
+  inheritedEventCount?: number;
   sessionId: string;
   header: JsonValue;
   revision: number;
@@ -124,6 +132,8 @@ export interface SessionSnapshot {
 }
 
 export interface SessionHead {
+  /** Exact fork prefix length, separate from the immutable DSH header. */
+  inheritedEventCount?: number;
   sessionId: string;
   header: JsonValue;
   revision: number;

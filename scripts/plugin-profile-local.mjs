@@ -1,3 +1,4 @@
+import { peerSpecs as compatibilityPeers } from "./compatibility.mjs";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -9,7 +10,7 @@ const projectDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const projectPackage = JSON.parse(await readFile(join(projectDir, "package.json"), "utf8"));
 const dshBin = requiredPath("DSH_TELEPORT_TEST_DSH_BIN");
 if (!existsSync(dshBin)) throw new Error("DSH_TELEPORT_TEST_DSH_BIN does not exist");
-const peerSpecs = requiredPeerSpecs();
+const peerSpecs = compatibilityPeers();
 
 const root = await mkdtemp(join(tmpdir(), "session-teleport-local-profile-"));
 const packDir = join(root, "package");
@@ -120,28 +121,6 @@ function runDsh(args, overrides = {}) {
 function requiredPath(name) {
   const value = requiredValue(name);
   return resolve(value);
-}
-
-function requiredPeerSpecs() {
-  return {
-    "@deepseek-ai/dsh-session": requiredValue("DSH_TELEPORT_TEST_SESSION_SPEC"),
-    "@deepseek-ai/dsh-session-persistence": requiredValue(
-      "DSH_TELEPORT_TEST_SESSION_PERSISTENCE_SPEC",
-    ),
-    "@deepseek-ai/dsh-session-persistence-jsonl": requiredValue(
-      "DSH_TELEPORT_TEST_JSONL_SPEC",
-    ),
-    "@deepseek-ai/cordis": requiredValue("DSH_TELEPORT_TEST_CORDIS_SPEC"),
-    "@deepseek-ai/cordis-plugin-include": "1.0.6",
-    "@deepseek-ai/cordis-plugin-loader": "1.0.2",
-    "@deepseek-ai/dsh-attachment": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-brand": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-invariants": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-scope": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-timeout": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-typert-protocol": "0.1.0-rc.6",
-  };
 }
 
 function requiredValue(name) {

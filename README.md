@@ -7,10 +7,19 @@ DSH peer packages 是外部依赖，保留各自许可，不在本仓库中复�
 本包保留 `private: true`，避免本地发布演练误触 npm 发布；受支持的插件源是
 `https://github.com/omdsh-dev/session-teleport`，安装时必须固定到完整 commit。
 
-当前适配器使用 npm next 包做严格编译基线：`@deepseek-ai/cordis@4.0.1-rc.4`，
+当前适配目标是 DSH `0.2.0-rc.1`（2026-09-28 的 npm `next` 预发布版本），
+严格编译基线为：`@deepseek-ai/cordis@4.0.4`，
 以及 `@deepseek-ai/dsh-session`、`@deepseek-ai/dsh-session-persistence`、
-`@deepseek-ai/dsh-session-persistence-jsonl` 的 `0.1.0-rc.6`。这些精确版本只用于
+`@deepseek-ai/dsh-session-persistence-jsonl` 的 `0.2.0-rc.1`。这些精确版本只用于
 开发和验证；安装时仍由目标 DSH 环境按 `peerDependencies` 提供兼容版本。
+
+新版采用 `create/open → SessionHandle`，支持 `read/append/flush/close`、
+`stat/list` 和空会话持久化。`0.7.0-rc.1` 插件与 authority 服务应一起升级：
+数据库自动迁移到 schema 5，保留 fork 的 `inheritedEventCount`。
+已有旧格式日志不会被自动改写成 format 4；应先通过兼容源后端迁移、读取并导出。
+直接保存的旧 Teleport 日志仍可归档，但新版 adapter 会拒绝打开非 format 4 日志。
+同一设备的所有 profile 必须共用 writer credential 目录；本地文件锁防止重复写者，
+跨设备交接由 PostgreSQL epoch fencing 保证。当前文件锁路径面向 macOS/Linux。
 
 ## 能做什么
 
@@ -20,12 +29,12 @@ DSH peer packages 是外部依赖，保留各自许可，不在本仓库中复�
 - 生成一次性、限时 handoff code；接管后旧 writer token 被 fencing。
 - 旧设备丢失时可由独立管理员凭据执行显式恢复接管，并审计每次 writer 变化。
 - 可对既有 Session 做无写入 dry-run、单事务导入和受约束的回滚切换。
-- 可从旧 DSH Profile 临时挂载只读 overlay，经 `inspect()` 抓取 Session，
+- 可从旧 DSH Profile 临时挂载只读 overlay，经 `open(id, "read")` / `handle.read()` 抓取 Session，
   不必手写 TypeScript，也不解析 JSONL/SQLite 物理文件。
 - 提供计划优先的 `install / upgrade / uninstall / doctor` 生命周期工具；
   只接受完整 commit pin，结构校验失败会恢复旧依赖。
 - 提供一致快照、增量读取与 SSE 观察端点。
-- 提供 DSH `PersistenceBackend` adapter 和 profile bundle patch。
+- 提供 DSH `SessionPersistence` / `SessionHandle` adapter 和 profile bundle patch。
 - 将每个 Session 的 writer credential 保存为本机 0600 原子文件。
 - 在非 loopback 监听时强制配置服务 Bearer token。
 
@@ -63,7 +72,7 @@ export DSH_TELEPORT_DEVICE_ID=office-mac
 export DSH_TELEPORT_HEALTH_TIMEOUT_MS=5000
 ```
 
-仅安装 bundle 不会切换 Session authority：默认仍使用 RC.6 自带 JSONL，Teleport
+仅安装 bundle 不会切换 Session authority：默认仍使用 DSH 0.2 自带 JSONL，Teleport
 adapter 保持禁用。先启动 Teleport 服务并验证 `/health`，再停止 profile、设置
 `DSH_TELEPORT_ENABLE=1` 并重启，才会关闭 JSONL、启用 Teleport。显式启用后如果
 服务不可达，profile 会拒绝启动，不会静默回退到另一份权威存储。
@@ -78,7 +87,6 @@ turn 完成并停止对应 profile，再重启；不要把它当成对运行中 
 需要 Node.js 22.19+ 和 PostgreSQL：
 
 ```bash
-export NPM_TOKEN
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm build
 
@@ -140,7 +148,7 @@ pnpm admin writer-audit <session-id>
 ## 导入既有 Session
 
 先让旧 writer 完成当前 turn、flush 并停止对应 Profile。迁移工具会临时启动
-这个 Profile，挂载一次性只读 overlay，并把一致 `inspect()` 结果写成 `0600`
+这个 Profile，挂载一次性只读 overlay，并把一致只读 handle 结果写成 `0600`
 bundle；它不修改旧 Profile 配置或旧存储，也不会覆盖已有输出文件：
 
 ```bash
@@ -167,14 +175,12 @@ dsh-teleport-import rollback <session-id> "cutover smoke check failed"
 ## 开发与验证
 
 ```bash
-export NPM_TOKEN
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm check
 pnpm audit --prod
 ```
 
-只读 npm 令牌仅通过进程环境提供；仓库 `.npmrc` 只保存 `${NPM_TOKEN}` 占位符，
-发布包检查会拒绝把 `.npmrc` 打进产物。
+依赖来自公共 npm registry，安装不需要 npm 令牌。发布包检查会拒绝把 `.npmrc` 打进产物。
 
 仓库内的通用测试覆盖 authority 的 CAS/fencing/handoff/idempotency、HTTP API、schema 与 credential file。更多说明见 [测试边界](docs/TESTING.md)。
 

@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 describe.skipIf(dshTestBin === undefined)("real DSH source capture", () => {
-  it("loads the temporary file URL overlay and exports through inspect()", async () => {
+  it("loads the temporary file URL overlay and exports through a read handle", async () => {
     const dshHome = await mkdtemp(join(tmpdir(), "session-teleport-dsh-home-"));
     temporaryRoots.push(dshHome);
     await chmod(dshHome, 0o700);
@@ -90,13 +90,16 @@ export function apply(ctx) {
   }
   ctx.provide("sessionPersistence", {
     name: "session-persistence-fixture",
-    async inspect(sessionId) {
+    async open(sessionId, access) {
+      if (access !== "read") throw new Error("capture must be read-only");
       return {
-        meta: { id: sessionId, version: 0, createdAt: 1 },
-        events: [
+        header: { id: sessionId, version: 4, createdAt: 1, isSeeded: false },
+        inheritedEventCount: 0,
+        async close() {},
+        async read() { return { events: [
           { type: "user/message", seq: 0, time: 1, data: { text: "fixture input" } },
           { type: "assistant/message", seq: 1, time: 2, data: { text: "fixture output" } },
-        ],
+        ] }; },
       };
     },
   });

@@ -19,15 +19,16 @@ class TeleportAuthority {
   async createSession(request) {
     assertIdentifier(request.sessionId, "sessionId");
     assertIdentifier(request.deviceId, "deviceId");
+    if (request.inheritedEventCount !== void 0) safeNonNegative(request.inheritedEventCount, "inheritedEventCount");
     const header = canonicalJson(request.header);
     const writerToken = secret();
     const inserted = await this.database.query(
       `INSERT INTO teleport_sessions
-        (session_id, header, writer_epoch, writer_device_id, writer_token_hash)
-       VALUES ($1, $2::jsonb, 1, $3, $4)
+        (session_id, header, writer_epoch, writer_device_id, writer_token_hash, inherited_event_count)
+       VALUES ($1, $2::jsonb, 1, $3, $4, $5)
        ON CONFLICT (session_id) DO NOTHING
        RETURNING session_id`,
-      [request.sessionId, header, request.deviceId, sha256(writerToken)]
+      [request.sessionId, header, request.deviceId, sha256(writerToken), request.inheritedEventCount ?? null]
     );
     if (inserted.rowCount !== 1) {
       throw new TeleportError("SESSION_EXISTS", `session "${request.sessionId}" already exists`);
@@ -54,12 +55,14 @@ class TeleportAuthority {
       expectedNextSeq: 0,
       idempotencyKey: request.idempotencyKey,
       events: request.events
-    });
+    }, true);
+    if (request.inheritedEventCount !== void 0) safeNonNegative(request.inheritedEventCount, "inheritedEventCount");
     const header = canonicalJson(request.header);
     const digest = sha256(
       canonicalJson({
         sessionId: request.sessionId,
         header: request.header,
+        ...request.inheritedEventCount === void 0 ? {} : { inheritedEventCount: request.inheritedEventCount },
         deviceId: request.deviceId,
         events: request.events
       })
@@ -67,11 +70,11 @@ class TeleportAuthority {
     const result = await this.database.transaction(async (transaction) => {
       const inserted = await transaction.query(
         `INSERT INTO teleport_sessions
-          (session_id, header, writer_epoch, writer_device_id, writer_token_hash)
-         VALUES ($1, $2::jsonb, 1, $3, $4)
+          (session_id, header, writer_epoch, writer_device_id, writer_token_hash, inherited_event_count)
+         VALUES ($1, $2::jsonb, 1, $3, $4, $5)
          ON CONFLICT (session_id) DO NOTHING
          RETURNING session_id`,
-        [request.sessionId, header, request.deviceId, sha256(request.writerToken)]
+        [request.sessionId, header, request.deviceId, sha256(request.writerToken), request.inheritedEventCount ?? null]
       );
       if (inserted.rowCount !== 1) {
         const session = await lockSession(transaction, request.sessionId);
@@ -104,7 +107,7 @@ class TeleportAuthority {
           [request.sessionId, event.seq, eventJson(event)]
         );
       }
-      const nextSeq = request.events.at(-1).seq + 1;
+      const nextSeq = request.events.length;
       await transaction.query(
         `UPDATE teleport_sessions
             SET revision = 1, next_seq = $2, updated_at = CURRENT_TIMESTAMP
@@ -120,7 +123,7 @@ class TeleportAuthority {
           request.sessionId,
           request.idempotencyKey,
           digest,
-          request.events.at(-1).seq,
+          nextSeq - 1,
           nextSeq
         ]
       );
@@ -225,7 +228,7 @@ class TeleportAuthority {
     return this.database.transaction(
       async (transaction) => {
         const sessionResult = await transaction.query(
-          `SELECT session_id, header, revision, next_seq, writer_epoch,
+          `SELECT session_id, header, inherited_event_count, revision, next_seq, writer_epoch,
                   writer_device_id, writer_token_hash
              FROM teleport_sessions WHERE session_id = $1`,
           [sessionId]
@@ -243,6 +246,9 @@ class TeleportAuthority {
         return {
           sessionId,
           header: asJsonValue(session.header),
+          ...session.inherited_event_count == null ? {} : {
+            inheritedEventCount: integer(session.inherited_event_count, "inherited_event_count")
+          },
           revision: integer(session.revision, "revision"),
           nextSeq: integer(session.next_seq, "next_seq"),
           writerEpoch: integer(session.writer_epoch, "writer_epoch"),
@@ -256,7 +262,7 @@ class TeleportAuthority {
   async head(sessionId) {
     assertIdentifier(sessionId, "sessionId");
     const result = await this.database.query(
-      `SELECT session_id, header, revision, next_seq, writer_epoch,
+      `SELECT session_id, header, inherited_event_count, revision, next_seq, writer_epoch,
               writer_device_id, writer_token_hash
          FROM teleport_sessions WHERE session_id = $1`,
       [sessionId]
@@ -269,7 +275,7 @@ class TeleportAuthority {
   }
   async listHeads() {
     const result = await this.database.query(
-      `SELECT session_id, header, revision, next_seq, writer_epoch,
+      `SELECT session_id, header, inherited_event_count, revision, next_seq, writer_epoch,
               writer_device_id, writer_token_hash
          FROM teleport_sessions
         ORDER BY created_at, session_id`
@@ -667,7 +673,7 @@ class TeleportAuthority {
 }
 async function lockSession(transaction, sessionId) {
   const result = await transaction.query(
-    `SELECT session_id, header, revision, next_seq, writer_epoch,
+    `SELECT session_id, header, inherited_event_count, revision, next_seq, writer_epoch,
             writer_device_id, writer_token_hash
        FROM teleport_sessions
       WHERE session_id = $1
@@ -694,13 +700,16 @@ function headFromRow(session) {
   return {
     sessionId: session.session_id,
     header: asJsonValue(session.header),
+    ...session.inherited_event_count == null ? {} : {
+      inheritedEventCount: integer(session.inherited_event_count, "inherited_event_count")
+    },
     revision: integer(session.revision, "revision"),
     nextSeq: integer(session.next_seq, "next_seq"),
     writerEpoch: integer(session.writer_epoch, "writer_epoch"),
     ...session.writer_device_id === null ? {} : { writerDeviceId: session.writer_device_id }
   };
 }
-function validateAppend(request) {
+function validateAppend(request, allowEmpty = false) {
   assertIdentifier(request.sessionId, "sessionId");
   assertWriterCredentials(request.writer);
   assertIdentifier(request.writer.deviceId, "writer.deviceId");
@@ -709,7 +718,7 @@ function validateAppend(request) {
   safeNonNegative(request.writer.writerEpoch, "writer.writerEpoch");
   safeNonNegative(request.expectedRevision, "expectedRevision");
   safeNonNegative(request.expectedNextSeq, "expectedNextSeq");
-  if (!Array.isArray(request.events) || request.events.length === 0) {
+  if (!Array.isArray(request.events) || !allowEmpty && request.events.length === 0) {
     throw new TeleportError("BAD_REQUEST", "append requires at least one event");
   }
   for (const [index, value] of request.events.entries()) {
@@ -769,7 +778,7 @@ function validateImportRollback(request) {
   assertIdentifier(request.importIdempotencyKey, "importIdempotencyKey");
   assertIdentifier(request.actorId, "actorId");
   safePositive(request.expectedRevision, "expectedRevision");
-  safePositive(request.expectedNextSeq, "expectedNextSeq");
+  safeNonNegative(request.expectedNextSeq, "expectedNextSeq");
   safePositive(request.expectedWriterEpoch, "expectedWriterEpoch");
   if (typeof request.reason !== "string" || request.reason.trim().length === 0) {
     throw new TeleportError("BAD_REQUEST", "rollback reason is required");

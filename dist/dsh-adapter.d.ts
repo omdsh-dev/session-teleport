@@ -1,6 +1,6 @@
 import { Context, Service } from "@deepseek-ai/cordis";
-import { SessionPersistence, SessionPersistenceRevision, type PersistenceBackend, type SessionLocation, type SessionPersistenceSnapshot, type StoredPrefix, type StoredSuffix } from "@deepseek-ai/dsh-session-persistence";
-import type { SessionEvent, SessionHeader, SessionId, SessionPreparation } from "@deepseek-ai/dsh-session";
+import { SessionPersistence, type SessionAccess, type SessionHandle, type SessionPersistenceCreateOptions, type SessionPersistenceListOptions, type SessionPersistenceOpenOptions, type SessionPersistenceSnapshot, type SessionPersistenceStatOptions } from "@deepseek-ai/dsh-session-persistence";
+import { type SessionHeader, type SessionId } from "@deepseek-ai/dsh-session";
 import { type WriterCredentialStore } from "./credential-store.js";
 import { TeleportClient } from "./client.js";
 import type { CreateHandoffResult, WriterCredentials } from "./types.js";
@@ -15,49 +15,30 @@ export interface SessionPersistenceTeleportDependencies {
     client?: TeleportClient;
     credentialStore?: WriterCredentialStore;
 }
-/** DSH PersistenceBackend adapter over the Teleport HTTP authority. */
-export declare class SessionPersistenceTeleport extends SessionPersistence implements PersistenceBackend<never> {
+/** DSH 0.2 handle-based persistence over the PostgreSQL authority. */
+export declare class SessionPersistenceTeleport extends SessionPersistence {
     readonly config: SessionPersistenceTeleportConfig;
     static inject: string[];
     readonly name = "session-persistence-teleport";
-    readonly supportsRawArtifacts = false;
     private readonly client;
     private readonly credentials;
-    private readonly coordinator;
-    private readonly observedHeads;
+    private readonly writers;
+    private readonly handles;
     private readonly sourceIdentity;
-    private readonly deviceId;
     constructor(ctx: Context, config: SessionPersistenceTeleportConfig, dependencies?: SessionPersistenceTeleportDependencies);
     protected [Service.init](): Promise<void>;
-    locate(_meta: SessionHeader): SessionLocation | undefined;
-    create(meta: SessionHeader): Promise<void>;
-    append(id: SessionId, events: readonly SessionEvent[]): Promise<void>;
-    prepare(id: SessionId, signal?: AbortSignal): Promise<SessionPreparation>;
-    load(id: SessionId): Promise<{
-        meta: SessionHeader;
-        events: readonly SessionEvent[];
-    }>;
-    inspect(id: SessionId, signal?: AbortSignal): Promise<{
-        meta: SessionHeader;
-        events: readonly SessionEvent[];
-    }>;
-    readFrom(id: SessionId, fromSeq: number, signal?: AbortSignal): Promise<{
-        meta: SessionHeader;
-        events: SessionEvent[];
-    }>;
-    loadStored(id: SessionId, signal?: AbortSignal): Promise<StoredPrefix<never> | undefined>;
-    readStoredRevision(id: SessionId, signal?: AbortSignal): Promise<SessionPersistenceRevision | undefined>;
-    loadStoredFrom(id: SessionId, fromSeq: number, signal?: AbortSignal): Promise<StoredSuffix | undefined>;
-    appendBatch(meta: SessionHeader, events: readonly SessionEvent[], isMaterialized: boolean): Promise<void>;
-    commitRepair(meta: SessionHeader, _tornMarker: undefined, closers: readonly SessionEvent[]): Promise<void>;
-    list(signal?: AbortSignal): Promise<SessionHeader[]>;
-    listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]>;
+    create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle>;
+    open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle>;
+    flush(): Promise<void>;
+    stat(id: SessionId, options?: SessionPersistenceStatOptions): Promise<SessionPersistenceSnapshot | undefined>;
+    list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>;
     createHandoff(id: SessionId, ttlMs?: number): Promise<CreateHandoffResult>;
     acceptHandoff(code: string): Promise<WriterCredentials>;
-    private appendExisting;
+    private snapshot;
+    private adopt;
+    private release;
     private requireWriter;
-    private assertLocalWriter;
-    private observe;
-    private revision;
+    private assertDevice;
+    private acquireLock;
 }
 export default SessionPersistenceTeleport;
